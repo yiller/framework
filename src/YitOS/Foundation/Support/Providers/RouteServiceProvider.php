@@ -12,7 +12,7 @@ class RouteServiceProvider extends ServiceProvider {
   
   public function backend(Router $router) {
     $router->group(['namespace' => 'YitOS\Backend\Http\Controllers', 'prefix' => config('backend.prefix')], function($router) {
-      Route::get('/', function(){
+      $router->get('/', function(){
         return 'Backend';
       });
     });
