@@ -9,9 +9,9 @@ trait AuthenticatesAndRegistersUsers {
   protected $auth;
   protected $registrar;
   protected $loginRules = [
-    'username' => [
-      ['name' => 'required', 'message' => '请输入用户名！'],
-      ['name' => 'alpha_dash', 'message' => '用户名只能包含数字、字母、下划线（_）和破折号（-）！']
+    'account' => [
+      ['name' => 'required', 'message' => '请输入用户名、电子邮箱或手机号码！'],
+      ['name' => 'account', 'message' => '请输入用户名、电子邮箱或手机号码2！']
     ],
     'password' => [
       ['name' => 'required', 'message' => '请输入密码！']
@@ -32,19 +32,20 @@ trait AuthenticatesAndRegistersUsers {
   }
   
   public function getLogin() {
-    return view($this->loginView());
+    return view($this->loginView(), [
+      'config' => rules_convert($this->loginRules, 'jquery')
+    ]);
   }
   
   public function postLogin(Request $request) {
-    $this->validate($request, [
-			'username' => 'required|alpha_dash', 'password' => 'required',
-		]);
-    $credentials = $request->only('username', 'password');
+    $this->validate($request, rules_convert($this->loginRules)->get('rules'), rules_convert($this->loginRules)->get('messages'));
+    $credentials = $request->only('account', 'password');
     if ($this->auth->attempt($credentials, $request->has('remember'))) {
 			return redirect()->intended($this->redirectPath());
 		}
+    
     return redirect($this->loginPath())
-            ->withInput($request->only('email', 'remember'))
+            ->withInput($request->only('username', 'remember'))
             ->withErrors([
               'email' => $this->getFailedLoginMessage(),
             ]);
