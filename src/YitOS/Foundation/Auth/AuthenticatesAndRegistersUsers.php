@@ -8,6 +8,15 @@ trait AuthenticatesAndRegistersUsers {
   
   protected $auth;
   protected $registrar;
+  protected $loginRules = [
+    'username' => [
+      ['name' => 'required', 'message' => '请输入用户名！'],
+      ['name' => 'alpha_dash', 'message' => '用户名只能包含数字、字母、下划线（_）和破折号（-）！']
+    ],
+    'password' => [
+      ['name' => 'required', 'message' => '请输入密码！']
+    ],
+  ];
   
   public function getRegister() {
     return view('auth.register');
