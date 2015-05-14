@@ -1,7 +1,6 @@
 <?php namespace YitOS\Backend\Http\Controllers;
 
 use Illuminate\Contracts\Auth\Guard;
-use Illuminate\Contracts\Auth\Registrar;
 use YitOS\Foundation\Auth\AuthenticatesAndRegistersUsers;
 
 class IndexController extends Controller {
@@ -17,7 +16,7 @@ class IndexController extends Controller {
   }
   
   public function anyIndex() {
-    return 'IndexController@index';
+    return view('backend.dashboard');
   }
   
 }
