@@ -13,7 +13,7 @@ abstract class Controller extends BaseController {
   }
   
   private function setYitOSConfig() {
-    Config::set('auth.model', 'YitOS\Backend\Model\User');
+    Config::set('auth.model', 'YitOS\Model\User');
     return $this;
   }
   

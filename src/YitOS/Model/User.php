@@ -1,4 +1,4 @@
-<?php namespace YitOS\Backend\Model;
+<?php namespace YitOS\Model;
 
 use Illuminate\Auth\Authenticatable;
 use Illuminate\Database\Eloquent\Model;
