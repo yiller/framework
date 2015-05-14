@@ -15,6 +15,7 @@ class RouteServiceProvider extends ServiceProvider {
       //$router->get('/', 'IndexController@index');
       //$router->get('login', 'IndexController@login');
       $router->controller('/', 'IndexController', [
+        'anyIndex' => 'backend.dashboard',
         'getLogin' => 'backend.login',
       ]);
     });

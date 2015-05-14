@@ -25,10 +25,13 @@ class AuthenticateWithACL implements Middleware {
         return redirect()->guest(route('backend.login'));
       } elseif (!array_key_exists('namespace', $request->route()->getAction()) || 
                 ($request->route()->getAction()['namespace'] !== 'YitOS\Backend\Http\Controllers')) {
-        return redirect()->guest(config('auth.login'));
+        
+        return redirect()->guest(route(config('auth.loginRoute')));
       }
       //dd($request->route()->getAction());
       //return($request->ajax() ? response('Unauthorized.', 401) : redirect()->guest('auth/login'));
+    } else { // 用户已登录
+      
     }
     return $next($request);
   }

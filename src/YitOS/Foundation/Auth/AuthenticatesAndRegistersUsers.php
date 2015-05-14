@@ -39,15 +39,25 @@ trait AuthenticatesAndRegistersUsers {
   
   public function postLogin(Request $request) {
     $this->validate($request, rules_convert($this->loginRules)->get('rules'), rules_convert($this->loginRules)->get('messages'));
-    $credentials = $request->only('account', 'password');
-    if ($this->auth->attempt($credentials, $request->has('remember'))) {
+    $credentials = ['active' => 1, 'password' => $request->get('password')];
+    $factory = $this->getValidationFactory(); $success = false;
+    if (($v = $factory->make($request->all(), ['account' => 'email'])) && !($v->fails())) {
+      $success = $this->auth->attempt(array_merge($credentials, ['email' => $request->get('account')]), $request->has('remember'));
+    } elseif (($v = $factory->make($request->all(), ['account' => 'phoneCN'])) && !($v->fails())) {
+      $success = $this->auth->attempt(array_merge($credentials, ['phone' => $request->get('account')]), $request->has('remember')) || 
+                 $this->auth->attempt(array_merge($credentials, ['username' => $request->get('account')]), $request->has('remember'));
+    } else {
+      $success = $this->auth->attempt(array_merge($credentials, ['username' => $request->get('account')]), $request->has('remember'));
+    }
+    
+    if ($success) {
 			return redirect()->intended($this->redirectPath());
 		}
     
     return redirect($this->loginPath())
-            ->withInput($request->only('username', 'remember'))
+            ->withInput($request->only('account', 'remember'))
             ->withErrors([
-              'email' => $this->getFailedLoginMessage(),
+              'account' => $this->getFailedLoginMessage(),
             ]);
   }
   
@@ -57,18 +67,18 @@ trait AuthenticatesAndRegistersUsers {
   
   public function getLogout() {
 		$this->auth->logout();
-		return redirect(property_exists($this, 'redirectAfterLogout') ? $this->redirectAfterLogout : '/');
+		return redirect(property_exists($this, 'afterLogoutRoute') ? route($this->afterLogoutRoute) : '/');
 	}
   
   public function redirectPath() {
-		if (property_exists($this, 'redirectPath')) {
-			return $this->redirectPath;
+		if (property_exists($this, 'afterLoginRoute')) {
+			return route($this->afterLoginRoute);
 		}
-		return property_exists($this, 'redirectTo') ? $this->redirectTo : '/home';
+		return property_exists($this, 'redirectTo') ? $this->redirectTo : route(config('auth.afterLoginRoute'));
 	}
   
   public function loginPath()	{
-		return property_exists($this, 'loginPath') ? $this->loginPath : '/auth/login';
+		return route(property_exists($this, 'loginRoute') ? $this->loginRoute : config('auth.loginRoute'));
 	}
   
   protected function allowRegister() {
@@ -76,7 +86,7 @@ trait AuthenticatesAndRegistersUsers {
   }
   
   protected function loginView() {
-    return property_exists($this, 'loginView') ? $this->loginView : 'auth.login';
+    return property_exists($this, 'loginView') ? $this->loginView : config('auth.loginView');
   }
   
 }
