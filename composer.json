@@ -19,7 +19,7 @@
     },
     "autoload": {
         "files": [
-            "src/YitOS/Foundation/helpers.php"
+            "src/YitOS/_G/Foundation/helpers.php"
         ],
         "psr-4": {
             "YitOS\\": "src/YitOS/"
