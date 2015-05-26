@@ -1,7 +1,7 @@
-<?php namespace YitOS\Backend\Http\ViewComposers;
+<?php namespace YitOS\_G\Http\ViewComposers;
 
 use Illuminate\Contracts\View\View;
-use YitOS\Model\Page;
+use YitOS\_G\Model\Page;
 
 class TKDComposer {
   

@@ -85,7 +85,7 @@ class Model extends BaseModel {
     if ($defModel && $name == str_singular($name)) { // 单数
       $related = $defModel->class;
       $instance = new $related;
-      if (Schema::hasColumn($this->table, $instance->getForeignKey())) { // 当前表含有关联表外键 belongsTo
+      if (Schema::hasColumn($this->getTable(), $instance->getForeignKey())) { // 当前表含有关联表外键 belongsTo
         return $this->belongsTo($defModel->class, $instance->getForeignKey());
       }
       if (Schema::hasColumn($instance->getTable(), $this->getForeignKey())) { // 关联表含有当前表外键 hasOne

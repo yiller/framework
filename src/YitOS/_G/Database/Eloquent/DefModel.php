@@ -9,7 +9,7 @@ class DefModel extends BaseModel {
   protected $fillable = ['name', 'label', 'class', 'user_id'];
   
   public function columns() {
-    return $this->hasMany('YitOS\Database\Eloquent\DefModelColumn', 'model_id');
+    return $this->hasMany('YitOS\_G\Database\Eloquent\DefModelColumn', 'model_id');
   }
   
   /**

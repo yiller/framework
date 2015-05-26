@@ -1,10 +1,12 @@
 <?php namespace YitOS\Backend\Http\Controllers;
 
 use Illuminate\Contracts\Auth\Guard;
-use YitOS\Foundation\Auth\AuthenticatesAndRegistersUsers;
+use YitOS\_G\Foundation\Auth\AuthenticatesAndRegistersUsers;
 
 class IndexController extends Controller {
   use AuthenticatesAndRegistersUsers;
+  
+  protected $validCompany = false;
   
   public function __construct(Guard $auth) {
     parent::__construct();

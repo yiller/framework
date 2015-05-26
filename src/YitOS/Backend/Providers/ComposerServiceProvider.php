@@ -12,7 +12,7 @@ class ComposerServiceProvider extends ServiceProvider {
 	 */
 	public function boot()
 	{
-		View::composer('yitos.backend.partial.page.TKD', 'YitOS\Backend\Http\ViewComposers\TKDComposer');
+		View::composer('yitos.backend.partial.page.TKD', 'YitOS\_G\Http\ViewComposers\TKDComposer');
     View::composer('yitos.backend.partial.sidebar.menu', 'YitOS\Backend\Http\ViewComposers\MenusComposer');
     View::composer(['yitos.backend.partial.page.breadcrumbs', 'yitos.backend.partial.page.header'], 'YitOS\Backend\Http\ViewComposers\BreadcrumbsComposer');
 	}

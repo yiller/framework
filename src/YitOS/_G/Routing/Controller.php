@@ -8,12 +8,8 @@ use Illuminate\Foundation\Validation\ValidatesRequests;
 abstract class Controller extends BaseController {
   use DispatchesCommands, ValidatesRequests;
   
-  protected $acl = false;
-  
   public function __construct() {
     $this->setYitOSConfig()->loadYitOSValidator();
-    
-    if ($this->acl) $this->middleware('acl'); 
   }
   
   /**

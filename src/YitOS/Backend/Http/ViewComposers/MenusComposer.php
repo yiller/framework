@@ -1,7 +1,7 @@
 <?php namespace YitOS\Backend\Http\ViewComposers;
 
 use Illuminate\Contracts\View\View;
-use YitOS\Model\Menu;
+use YitOS\_G\Model\Menu;
 
 class MenusComposer {
   

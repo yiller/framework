@@ -14,7 +14,7 @@ class AuthenticateWithCompany {
 	public function handle($request, Closure $next) {
     $user = $this->auth->user();
     if (!$user->enterprise || $user->enterprise->slug != $request->route('company')) {
-      return $request->ajax() ? response('Page NotFound.', 404) : abort(404);
+      return $request->ajax() ? response('Page Not Found.', 404) : abort(404);
     }
 		return $next($request);
 	}

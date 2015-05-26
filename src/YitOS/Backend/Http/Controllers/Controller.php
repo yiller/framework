@@ -1,11 +1,17 @@
 <?php namespace YitOS\Backend\Http\Controllers;
 
-use Config;
-use YitOS\Routing\Controller as BaseController;
+use YitOS\_G\Routing\Controller as BaseController;
 
 abstract class Controller extends BaseController {
   
-  protected $acl = true;
+  protected $validCompany = true;
+  
+  public function __construct() {
+    parent::__construct();
+    
+    $this->middleware('acl');
+    if ($this->validCompany) $this->middleware('company');
+  }
   
   protected function registriedConfig() {
     return [

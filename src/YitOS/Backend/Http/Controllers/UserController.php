@@ -1,13 +1,11 @@
 <?php namespace YitOS\Backend\Http\Controllers;
 
-use YitOS\Foundation\Scaffold\Traits\DataTable;
-use YitOS\Model\User;
+use YitOS\_G\Model\User;
 
-class UserController extends BackendController {
-  use DataTable;
+class UserController extends Controller {
   
   public function index() {
-    dd(User::getModel());
+    dd(app('request')->user()->profile);
     return $this->table();
   }
   

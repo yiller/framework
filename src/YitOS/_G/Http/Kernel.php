@@ -7,9 +7,11 @@ use Illuminate\Foundation\Http\Kernel as BaseKernel;
 
 class Kernel extends BaseKernel {
   
+  protected $modules = [];
+  
   public function __construct(Application $app, Router $router) {
     parent::__construct($app, $router);
-    
+
     // 未登录用户可访问
     $router->middleware('guest', 'YitOS\_G\Http\Middleware\RedirectIfAuthenticated');
     // ACL控制
