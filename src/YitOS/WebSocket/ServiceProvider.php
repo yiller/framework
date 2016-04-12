@@ -12,13 +12,6 @@ use Illuminate\Support\ServiceProvider as BaseServiceProvider;
 class ServiceProvider extends BaseServiceProvider {
   
   /**
-   * 该服务延迟加载
-   * 
-   * @var bool
-   */
-  protected $defer = true;
-  
-  /**
    * 注册该服务提供者为单件对象
    *
    * @access public

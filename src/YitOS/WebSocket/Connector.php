@@ -166,7 +166,7 @@ class Connector {
   public function __call($name, $parameters) {
     $url = $this->gateway($name);
     $method = $this->method($name);
-    $request = $parameters ? $this->beforeRequest($name, $parameters[0]) : '';
+    $request = $this->beforeRequest($name, $parameters ? $parameters[0] : []);
     if (extension_loaded('curl')) {
       $this->error = '';
       $ch = curl_init();
@@ -188,6 +188,7 @@ class Connector {
       }
       $output = curl_exec($ch);
       if (($this->http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE)) != 200) {
+        print_r($output);exit;
         $output = '';
         $this->error = curl_error($ch);
       }
