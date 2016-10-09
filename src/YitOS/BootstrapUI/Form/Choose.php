@@ -1,11 +1,11 @@
-<?php namespace YitOS\Foundation\BootstrapUI\Form;
+<?php namespace YitOS\BootstrapUI\Form;
 
 /**
  * 单（多）选（表单）前端助手
  *
  * @author yiller <tech.yiller@yitos.cn>
- * @package YitOS\Foundation\BootstrapUI\Form
- * @see \YitOS\Foundation\BootstrapUI\Form\Element
+ * @package YitOS\BootstrapUI\Form
+ * @see \YitOS\BootstrapUI\Form\Element
  */
 class Choose extends Element {
   

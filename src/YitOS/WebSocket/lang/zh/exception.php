@@ -1,6 +1,7 @@
 <?php
 
 return [
+  'access_denied' => '<h3>您无权访问系统</h3><p>请联系管理员开通相应权限！</p>',
   'module_not_installed' => 'CURL模块尚未安装',
   
   'connector_configurature_error' => '同步连接配置错误',

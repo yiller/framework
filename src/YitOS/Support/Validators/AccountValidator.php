@@ -1,9 +1,9 @@
-<?php namespace YitOS\Foundation\Validators;
+<?php namespace YitOS\Support\Validators;
 
 /**
  * 验证账号
  *
- * @package YitOS\Foundation\Validators
+ * @package YitOS\Support\Validators
  * @author yiller <tech.yiller@yitos.cn>
  */
 class AccountValidator {
@@ -11,7 +11,6 @@ class AccountValidator {
   /**
    * 验证账号
    * Email、手机号码或者用户名
-   * 
    * @param string $attribute   属性名称
    * @param string $value       属性值
    * @param array $parameters   额外参数

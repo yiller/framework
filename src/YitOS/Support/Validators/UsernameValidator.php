@@ -1,9 +1,9 @@
-<?php namespace YitOS\Foundation\Validators;
+<?php namespace YitOS\Support\Validators;
 
 /**
  * 验证用户名
  * 
- * @package YitOS\Foundation\Validators
+ * @package YitOS\Support\Validators
  * @author yiller <tech.yiller@yitos.cn>
  */
 class UsernameValidator {

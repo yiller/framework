@@ -1,17 +1,16 @@
-<?php namespace YitOS\Foundation\BootstrapUI\Form;
+<?php namespace YitOS\BootstrapUI\Form;
 
 /**
  * 输入框（表单）前端助手
  *
  * @author yiller <tech.yiller@yitos.cn>
- * @package YitOS\Foundation\BootstrapUI\Form
- * @see \YitOS\Foundation\BootstrapUI\Form\Element
+ * @package YitOS\BootstrapUI\Form
+ * @see \YitOS\BootstrapUI\Form\Element
  */
 class Text extends Element {
   
   /**
    * 渲染元素HTML
-   * 
    * @abstract
    * @access public
    * @param array $data

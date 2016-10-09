@@ -1,10 +1,10 @@
-<?php namespace YitOS\Foundation\BootstrapUI\Form;
+<?php namespace YitOS\BootstrapUI\Form;
 
 /**
  * Bootstrap UI元素基类
  *
  * @author yiller <tech.yiller@yitos.cn>
- * @package YitOS\Foundation\BootstrapUI\Form
+ * @package YitOS\BootstrapUI\Form
  */
 abstract class Element {
   

@@ -1,11 +1,11 @@
-<?php namespace YitOS\Foundation\BootstrapUI\Form;
+<?php namespace YitOS\BootstrapUI\Form;
 
 /**
  * 下拉菜单（表单）前端助手
  *
  * @author yiller <tech.yiller@yitos.cn>
- * @package YitOS\Foundation\BootstrapUI\Form
- * @see \YitOS\Foundation\BootstrapUI\Form\Element
+ * @package YitOS\BootstrapUI\Form
+ * @see \YitOS\BootstrapUI\Form\Element
  */
 class Select extends Element {
   

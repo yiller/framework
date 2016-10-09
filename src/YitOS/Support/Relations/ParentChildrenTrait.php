@@ -1,16 +1,15 @@
-<?php namespace YitOS\Foundation\Model;
+<?php namespace YitOS\Support\Relations;
 
 /**
  * 自身关联
  *
  * @author yiller <tech.yiller@yitos.cn>
- * @package YitOS\Foundation\Model
+ * @package YitOS\Support\Relations
  */
-trait SelfRelativeTrait {
+trait ParentChildrenTrait {
   
   /**
-   * 下级地址
-   * 
+   * 下级关联
    * @access public
    * @return \Illuminate\Database\Eloquent\Relations\HasMany
    */
@@ -19,8 +18,7 @@ trait SelfRelativeTrait {
   }
   
   /**
-   * 上级地址
-   * 
+   * 上级关联
    * @access public
    * @return \Illuminate\Database\Eloquent\Relations\BelongsTo
    */

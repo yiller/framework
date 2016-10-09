@@ -14,16 +14,14 @@ class Manager extends BaseManager {
   
   /**
    * 获得默认的连接名称
-   * 
    * @return string
    */
   public function getDefaultDriver() {
-    return $this->app['config']['websocket.default'];
+    return 'YitOS';
   }
   
   /**
    * 创建一个新的WebSocket驱动实例
-   * 
    * @access protected
    * @param string $driver
    * @return mixed
@@ -40,8 +38,16 @@ class Manager extends BaseManager {
   }
   
   /**
+   * 创建服务器连接着
+   * @access protected
+   * @return \YitOS\WebSocket\Connectors\YitOS
+   */
+  protected function createYitOSDriver() {
+    return new Connectors\YitOS($this->app);
+  }
+  
+  /**
    * 创建默认的WebSocket连接者
-   * 
    * @access protected
    * @param string $driver
    */

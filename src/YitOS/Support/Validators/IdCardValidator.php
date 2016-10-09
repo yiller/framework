@@ -1,9 +1,9 @@
-<?php namespace YitOS\Foundation\Validators;
+<?php namespace YitOS\Support\Validators;
 
 /**
  * 验证身份证号码
  *
- * @package YitOS\Foundation\Validators
+ * @package YitOS\Support\Validators
  * @author yiller <tech.yiller@yitos.cn>
  */
 class IdCardValidator {
@@ -11,7 +11,6 @@ class IdCardValidator {
   /**
    * 验证身份证号码
    * 由18位数字组成，第一位数字不能是0，最后一个数字可以是X
-   * 
    * @param string $attribute   属性名称
    * @param string $value       属性值
    * @param array $parameters   额外参数

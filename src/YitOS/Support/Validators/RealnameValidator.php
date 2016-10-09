@@ -1,9 +1,9 @@
-<?php namespace YitOS\Foundation\Validators;
+<?php namespace YitOS\Support\Validators;
 
 /**
  * 验证真实姓名
  * 
- * @package YitOS\Foundation\Validators
+ * @package YitOS\Support\Validators
  * @author yiller <tech.yiller@yitos.cn>
  */
 class RealnameValidator {
@@ -11,7 +11,6 @@ class RealnameValidator {
   /**
    * 验证真实姓名
    * 由2-8位中文字符组成
-   * 
    * @param string $attribute   属性名称
    * @param string $value       属性值
    * @param array $parameters   额外参数
