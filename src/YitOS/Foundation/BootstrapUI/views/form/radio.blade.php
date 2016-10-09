@@ -1,0 +1,11 @@
+<div class="form-group">
+  @include('ui::form.label')
+  <div class="col-md-9">
+    @inject('element', 'YitOS\Foundation\BootstrapUI\Form\Choose')
+    {!! $element::load()
+          ->name($name)
+          ->options($options)
+          ->helper(isset($helper)?$helper:'')
+          ->render($data, isset($default)?$default:'') !!}
+  </div>
+</div>

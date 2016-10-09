@@ -1,19 +1,18 @@
-<?php namespace YitOS\WebSocket;
+<?php namespace YitOS\MModelFactory;
 
 use Illuminate\Support\ServiceProvider as BaseServiceProvider;
 
 /**
- * WebSocket服务供应者
+ * Mongodb模型衍生服务供应者
  *
  * @author yiller <tech.yiller@yitos.cn>
- * @package YitOS\WebSocket
+ * @package YitOS\MModelFactory
  * @see \Illuminate\Support\ServiceProvider
  */
 class ServiceProvider extends BaseServiceProvider {
   
   public function boot() {
-    $this->loadViewsFrom(__DIR__.'/views', 'websocket');
-    $this->loadTranslationsFrom(__DIR__.'/lang', 'websocket');
+    $this->loadTranslationsFrom(__DIR__.'/lang', 'modelfactory');
   }
   
   /**
@@ -23,7 +22,7 @@ class ServiceProvider extends BaseServiceProvider {
    * @return void
    */
   public function register() {
-    $this->app->singleton('websocket', function($app) {
+    $this->app->singleton('mongodb.model.factory', function($app) {
       return new Manager($app);
     });
   }

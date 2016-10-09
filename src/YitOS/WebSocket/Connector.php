@@ -14,14 +14,12 @@ class Connector {
   
   /**
    * 网关地址
-   * 
    * @var string
    */
   protected $gateway = '';
   
   /**
    * 默认请求方式
-   * 
    * @var string
    */
   protected $method = 'get';
@@ -64,7 +62,7 @@ class Connector {
    */
   public function initialize($config) {
     if (!$config || !is_array($config)) {
-      throw new InvalidArgumentException(trans("Exeption.Connector.InvalidArgument"));
+      throw new InvalidArgumentException(trans("exception.connector.invalidArguments"));
     }
     foreach ($config as $k => $v) $this->$k = $v;
     return $this;
@@ -188,7 +186,7 @@ class Connector {
       }
       $output = curl_exec($ch);
       if (($this->http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE)) != 200) {
-        print_r($output);exit;
+        $this->app->environment('local') && die($output);
         $output = '';
         $this->error = curl_error($ch);
       }
@@ -198,7 +196,7 @@ class Connector {
       $url = strpos($url, '?') === false ? $url.'?'.$request : $url.'&'.$request;
       $output = file_get_contents($url);
     } else {
-      throw new RuntimeException('Exception.Connector.ExtensionNotSupport');
+      throw new RuntimeException(trans('websocket::exception.module_not_installed'));
     }
     return $this->afterRequest($name, $output);
   }

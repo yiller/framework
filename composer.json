@@ -1,28 +1,29 @@
 {
-    "name": "yitos/framework",
-    "description": "The YitOS Framework.",
-    "keywords": ["framework", "yitos", "laravel"],
-    "license": "MIT",
-    "homepage": "http://yitos.com",
-    "support": {
-        "issues": "https://github.com/yitos/framework/issues",
-        "source": "https://github.com/yitos/framework"
-    },
-    "authors": [
-        {
-            "name": "YiTao",
-            "email": "yiller@live.com"
-        }
+  "name": "yitos/framework",
+  "description": "The YitOS Framework.",
+  "keywords": ["framework", "yitos", "laravel"],
+  "license": "MIT",
+  "homepage": "http://yitos.com",
+  "support": {
+    "issues": "https://github.com/yitos/framework/issues",
+    "source": "https://github.com/yitos/framework"
+  },
+  "authors": [
+    {
+      "name": "YiTao",
+      "email": "yiller@live.com"
+    }
+  ],
+  "require": {
+    "php": ">=5.4.0"
+  },
+  "autoload": {
+    "files": [
+      "src/YitOS/Support/helpers.php"
     ],
-    "require": {
-        "php": ">=5.4.0"
-    },
-    "autoload": {
-        "files": [
-        ],
-        "psr-4": {
-            "YitOS\\": "src/YitOS/"
-        }
-    },
-    "minimum-stability": "dev"
+    "psr-4": {
+      "YitOS\\": "src/YitOS/"
+    }
+  },
+  "minimum-stability": "dev"
 }
