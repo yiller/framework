@@ -1,20 +1,21 @@
-<?php namespace YitOS\MModelFactory\Eloquent;
+<?php namespace YitOS\ModelFactory\Eloquent;
 
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Log;
 use Jenssegers\Mongodb\Eloquent\Model as BaseModel;
 use YitOS\Support\Facades\WebSocket;
+use YitOS\ModelFactory\Eloquent\Model as ModelContract;
 
 /**
  * Mongodb数据库模型基类
  *
  * @author yiller <tech.yiller@yitos.cn>
- * @package YitOS\MModelFactory\Eloquent
+ * @package YitOS\ModelFactory\Eloquent
  * @abstract
  * @see \Jenssegers\Mongodb\Eloquent\Model
  * @see \Illuminate\Database\Eloquent\Model
  */
-abstract class Model extends BaseModel {
+abstract class Mongodb extends BaseModel implements ModelContract {
   
   const LOG_LEVEL_DEBUG     = 'debug';
   const LOG_LEVEL_INFO      = 'info';
@@ -52,9 +53,9 @@ abstract class Model extends BaseModel {
    * @access public
    * @param string $entity
    * @param integer $duration
-   * @return \YitOS\MModelFactory\Eloquent\Model
+   * @return \YitOS\ModelFactory\Eloquent\Mongodb
    */
-  public function initialMongoDB($entity, $duration) {
+  public function initial($entity, $duration) {
     $this->entity = $entity;
     $this->duration = intval($duration);
     return $this;

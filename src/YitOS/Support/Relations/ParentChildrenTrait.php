@@ -14,7 +14,7 @@ trait ParentChildrenTrait {
    * @return \Illuminate\Database\Eloquent\Relations\HasMany
    */
   public function rel_children() {
-    return $this->hasMany('\\'.get_class($this), 'parent_id', 'id');
+    return $this->hasMany('\\'.get_class($this), 'parent_id');
   }
   
   /**

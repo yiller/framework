@@ -1,12 +1,13 @@
-<?php namespace YitOS\MModelFactory;
+<?php namespace YitOS\ModelFactory;
 
 use Illuminate\Support\Manager as BaseManager;
+use YitOS\ModelFactory\Eloquent\Model as ModelContract;
 
 /**
  * Mongodb模型工厂类
  *
  * @author yiller <tech.yiller@yitos.cn>
- * @package YitOS\MModelFactory
+ * @package YitOS\ModelFactory
  * @see \Illuminate\Support\Manager
  */
 class Manager extends BaseManager {
@@ -18,15 +19,15 @@ class Manager extends BaseManager {
    * @return string
    */
   public function getDefaultDriver() {
-    return $this->app['config']['mmodel.default'];
+    return $this->app['config']['model.default'];
   }
   
   /**
-   * 创建一个新的Mongodb模型实例
+   * 创建一个新的模型实例
    * 
    * @access protected
    * @param string $driver
-   * @return \YitOS\MModelFactory\Eloquent\Model
+   * @return \YitOS\ModelFactory\Eloquent\Model
    * 
    * @throws \InvalidArgumentException
    */
@@ -34,7 +35,7 @@ class Manager extends BaseManager {
     if (isset($this->customCreators[$driver])) {
       return $this->callCustomCreator($driver);
     }
-    $mapping = $this->app['config']['mmodel.mapping'];
+    $mapping = $this->app['config']['model.mapping'];
     $classname = $driver;
     $duration = 0;
     $initial = false;
@@ -57,7 +58,11 @@ class Manager extends BaseManager {
     }
     
     $instance = new $classname();
-    $initial && $instance->initialMongoDB($driver, $duration);
+    if (!($instance instanceof ModelContract)) {
+      throw new InvalidArgumentException(trans('modelfactory::exception.mapping_not_found', compact('classname')));
+    }
+    
+    $initial && $instance->initial($driver, $duration);
     $instance->syncDownload();
     return $instance;
   }

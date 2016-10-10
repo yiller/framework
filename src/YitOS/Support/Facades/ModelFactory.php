@@ -4,9 +4,9 @@ use Illuminate\Support\Facades\Facade;
 
 /**
  * @author yiller <tech.yiller@yitos.cn>
- * @see \YitOS\MModelFactory\Manager
+ * @see \YitOS\ModelFactory\Manager
  */
-class MModelFactory extends Facade {
+class ModelFactory extends Facade {
   
   /**
    * 获得组件的注册名字
@@ -15,7 +15,7 @@ class MModelFactory extends Facade {
    * @return string
    */
   protected static function getFacadeAccessor() {
-    return 'mongodb.model.factory';
+    return 'model.factory';
   }
   
 }
