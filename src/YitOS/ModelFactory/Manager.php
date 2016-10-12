@@ -1,5 +1,6 @@
 <?php namespace YitOS\ModelFactory;
 
+use InvalidArgumentException;
 use Illuminate\Support\Manager as BaseManager;
 use YitOS\ModelFactory\Eloquent\Model as ModelContract;
 

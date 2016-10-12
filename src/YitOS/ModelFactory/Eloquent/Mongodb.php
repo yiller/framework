@@ -12,6 +12,7 @@ use YitOS\ModelFactory\Eloquent\Model as ModelContract;
  * @author yiller <tech.yiller@yitos.cn>
  * @package YitOS\ModelFactory\Eloquent
  * @abstract
+ * @see \YitOS\ModelFactory\Eloquent\Model
  * @see \Jenssegers\Mongodb\Eloquent\Model
  * @see \Illuminate\Database\Eloquent\Model
  */
@@ -263,6 +264,7 @@ abstract class Mongodb extends BaseModel implements ModelContract {
     
     $this->logs(static::LOG_LEVEL_INFO, '数据同步（下行）开始', $now->format('U'));
     $response = WebSocket::sync_download($params);
+    dd($response);
     if ($response && $response['code'] == 1) {
       $message = '数据同步（下行）成功，成功同步 '.$response['total'].' 条记录';
       $objects = [];
