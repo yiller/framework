@@ -6,7 +6,7 @@
     {{ $label }}
   </label>
   <div class="col-md-9 mt-repeater-v2">
-    @inject('element', 'YitOS\Foundation\BootstrapUI\Form\Repeat')
+    @inject('element', 'YitOS\BootstrapUI\Form\Repeat')
     {!! $element::load()
           ->name($name)
           ->header($header_render)

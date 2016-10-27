@@ -1,7 +1,7 @@
 <div class="form-group">
   @include('ui::form.label')
   <div class="col-md-4">
-    @inject('element', 'YitOS\Foundation\BootstrapUI\Form\Icons')
+    @inject('element', 'YitOS\BootstrapUI\Form\Icons')
     {!! $element::load()
           ->name($name)
           ->extra($extra)

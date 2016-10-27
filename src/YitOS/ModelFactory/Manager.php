@@ -57,12 +57,12 @@ class Manager extends BaseManager {
     if (!class_exists($classname)) {
       throw new InvalidArgumentException(trans('modelfactory::exception.mapping_not_found', compact('classname')));
     }
-    
+
     $instance = new $classname();
     if (!($instance instanceof ModelContract)) {
       throw new InvalidArgumentException(trans('modelfactory::exception.mapping_not_found', compact('classname')));
     }
-    
+
     $initial && $instance->initial($driver, $duration);
     $instance->syncDownload();
     return $instance;

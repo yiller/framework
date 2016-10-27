@@ -33,4 +33,21 @@ class Connection extends BaseConnection {
     parent::__construct($config);
   }
   
+  /**
+   * 还原数据库选择
+   * @access public
+   * @return string
+   */
+  public function restoreDatabase() {
+    if (!$this->original_config) {
+      return '';
+    }
+    $original_database = $this->original_config['database'];
+    $alias = str_replace($original_database.'_', '', $this->config['database']);
+    $config = $this->config;
+    $config['database'] = $original_database;
+    parent::__construct($config);
+    return $alias;
+  }
+  
 }

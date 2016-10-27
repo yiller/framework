@@ -22,10 +22,10 @@ trait DataFormTrait {
    */
   protected function configDF() {
     if (!property_exists($this, 'name') || !property_exists($this, 'route') || 
-        !method_exists($this, 'definedBuilder') || !method_exists($this, 'definedElements') || 
-        !property_exists($this, 'elements') || !is_array($this->elements) || empty($this->elements)) {
+        !method_exists($this, 'definedBuilder') || !method_exists($this, 'definedElements')) {
       throw new RuntimeException(trans('ui::exception.form_not_supported'));
     }
+    
     $config = [];
     $config['name'] = $this->name;
     if (!(app('routes')->hasNamedRoute($this->route.'.handle'))) {
@@ -34,40 +34,48 @@ trait DataFormTrait {
     $config['handle_url'] = route($this->route.'.handle');
     
     $elements = [];
-    foreach ($this->elements as $key => $element) {
-      $element['name'] = $key;
-      if (!isset($element['bind'])  || !is_string($element['bind'])) { $element['bind']  = $key; }
-      $elements[] = $element['bind'];
-      $this->elements[$key] = $element;
+    foreach ($this->definedElements() as $element) {
+      $elements[$element['alias']] = [
+        'name'  => $element['alias'],
+        'label' => $element['name'],
+        'type'  => $element['structure'],
+      ];
     }
-    $elements = array_only_by_sort($this->definedElements(), $elements);
-    if (empty($elements)) {
-      throw new RuntimeException(trans('ui::exception.form_not_supported'));
-    }
+    $elements['parent_id'] = [
+      'name' => 'parent_id', 'label' => '上级分类', 'type' => 'parent_id', 'extra' => ['class' => 'input-medium']
+    ];
+    $elements['sort_order'] = [
+      'name' => 'sort_order', 'label' => '排列序号', 'type' => 'integer', 'extra' => ['class' => 'input-xsmall'], 'helper' => '排列序号越小越靠前'
+    ];
+    $sections = method_exists($this, 'elementsConfigured') ? $this->elementsConfigured($elements) : [['label' => '', 'elements' => $elements]];
     $config['sections'] = [];
-    $sections = property_exists($this, 'sections') ? $this->sections : [['label' => '', 'elements' => array_keys($this->elements)]];
     foreach ($sections as $key => $section) {
-      $elems = [];
-      foreach ($section['elements'] as $k) {
-        if (!isset($this->elements[$k]) || !isset($elements[$this->elements[$k]['bind']])) { continue; }
-        $elem = array_merge($elements[$this->elements[$k]['bind']], $this->elements[$k]);
-        if (!isset($elem['type'])  || !is_string($elem['type'])) { $elem['type']  = $k; }
-        if (!isset($elem['extra']) || !is_array($elem['extra'])) { $elem['extra'] = []; }
-        $elem['type'] == 'icon' && $elem['type'] = 'icons';
-        $elem['type'] == 'html' && $elem['type'] = 'editor';
-        $method = 'get'.studly_case($elem['type']).'Element';
-        $elem = method_exists($this, $method) ? $this->$method($elem) : $this->getDefaultElement($elem);
-        if (!array_key_exists('template', $elem) || 
-            !is_string($elem['template']) || 
-            !View::exists($elem['template'])) {
-          $elem['template'] = in_array($elem['type'], ['integer']) ? 'ui::form.text' : 'ui::form.'.$elem['type'];
+      $elements = [];
+      foreach ($section['elements'] as $element) {
+        $name = $element['name'];
+        if (!isset($element['bind']) || !is_string($element['bind'])) { $element['bind'] = $name; }
+        if (!isset($element['extra']) || !is_array($element['extra'])) { $element['extra'] = []; }
+        $method = 'get'.studly_case($element['type']).'Element';
+        $element = method_exists($this, $method) ? $this->$method($element) : $this->getDefaultElement($element);
+        if (!array_key_exists('template', $element) || 
+            !is_string($element['template']) || 
+            !View::exists($element['template'])) {
+          if ($element['type'] == 'integer') {
+            $element['template'] = 'ui::form.string';
+          } elseif ($element['name'] == 'TKD') {
+            $element['template'] = 'ui::form.TKD';
+          } else {
+            $element['template'] = 'ui::form.'.$element['type'];
+          }
         }
-        $elems[$k] = $elem;
+        $elements[$name] = $element;
       }
-      if (empty($elems)) { continue; }
-      $section['elements'] = $elems;
+      $section['elements'] = $elements;
       $section['is_active'] = empty($config['sections']);
       $config['sections'][$key] = $section;
+    }
+    if (!$config['sections']) {
+      throw new RuntimeException(trans('ui::exception.form_not_supported'));
     }
     return $config;
   }
@@ -98,7 +106,7 @@ trait DataFormTrait {
       }
       return $arr;
     };
-    $element['options'] = $children(isset($element['parent_id']) ? $element['parent_id'] : 0);
+    $element['options'] = $children(isset($element['parent_id']) ? $element['parent_id'] : '');
     array_unshift($element['options'], ['divider' => 1]);
     return $this->getSelectElement($element);
   }

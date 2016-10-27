@@ -1,4 +1,4 @@
-@include('ui::form.text', [
+@include('ui::form.string', [
   'label' => '页面标题',
   'name' => 'TKD[title]',
   'extra' => [],

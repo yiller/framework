@@ -1,7 +1,7 @@
 <div class="form-group">
   @include('ui::form.label')
   <div class="col-md-4">
-    @inject('element', 'YitOS\Foundation\BootstrapUI\Form\Select')
+    @inject('element', 'YitOS\BootstrapUI\Form\Select')
     {!! $element::load()
           ->name($name)
           ->options($options)

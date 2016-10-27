@@ -40,7 +40,6 @@ class Connector {
   
   /**
    * 生成一个连接者实例
-   * 
    * @access public
    * @param array|null $config
    * @return void
@@ -53,7 +52,6 @@ class Connector {
   
   /**
    * 初始化连接者参数
-   * 
    * @access public
    * @param array|null $config
    * @return \YitOS\WebSocket\Connector
@@ -70,7 +68,6 @@ class Connector {
   
   /**
    * 获得当前请求网关地址
-   * 
    * @access protected
    * @param string $name
    * @return string
@@ -90,7 +87,6 @@ class Connector {
   
   /**
    * 获得当前请求的请求方式
-   * 
    * @access protected
    * @param string $name
    * @return string
@@ -110,7 +106,6 @@ class Connector {
   
   /**
    * 生成请求数据
-   * 
    * @access protected
    * @param string $name
    * @param array $parameters
@@ -126,7 +121,6 @@ class Connector {
   
   /**
    * 处理响应数据
-   * 
    * @access protected
    * @param string $name
    * @param string $output
@@ -142,7 +136,6 @@ class Connector {
   
   /**
    * 返回最近一次的请求错误
-   * 
    * @access public
    * @return string
    */
@@ -152,7 +145,6 @@ class Connector {
   
   /**
    * 动态调用方法
-   * 
    * @access public
    * @param string $name
    * @param array $parameters

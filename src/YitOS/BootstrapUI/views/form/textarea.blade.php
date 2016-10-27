@@ -1,7 +1,7 @@
 <div class="form-group">
   @include('ui::form.label')
   <div class="col-md-9">
-    @inject('element', 'YitOS\Foundation\BootstrapUI\Form\Textarea')
+    @inject('element', 'YitOS\BootstrapUI\Form\Textarea')
     {!! $element::load()
           ->name($name)
           ->extra($extra)

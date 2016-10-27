@@ -2,7 +2,10 @@
 
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cache;
 use Jenssegers\Mongodb\Eloquent\Model as BaseModel;
+use YitOS\Support\Relations\ParentChildrenTrait;
 use YitOS\Support\Facades\WebSocket;
 use YitOS\ModelFactory\Eloquent\Model as ModelContract;
 
@@ -17,6 +20,7 @@ use YitOS\ModelFactory\Eloquent\Model as ModelContract;
  * @see \Illuminate\Database\Eloquent\Model
  */
 abstract class Mongodb extends BaseModel implements ModelContract {
+  use ParentChildrenTrait;
   
   const LOG_LEVEL_DEBUG     = 'debug';
   const LOG_LEVEL_INFO      = 'info';
@@ -49,8 +53,13 @@ abstract class Mongodb extends BaseModel implements ModelContract {
   protected $needSyncUpload = false;
   
   /**
+   * 实体结构
+   * @var array
+   */
+  protected $elements = [];
+  
+  /**
    * 初始化模型数据
-   * 
    * @access public
    * @param string $entity
    * @param integer $duration
@@ -64,7 +73,6 @@ abstract class Mongodb extends BaseModel implements ModelContract {
   
   /**
    * 获得同步配置表
-   * 
    * @access protected
    * @return \Jenssegers\Mongodb\Collection
    */
@@ -74,7 +82,6 @@ abstract class Mongodb extends BaseModel implements ModelContract {
   
   /**
    * 插入同步日志
-   * 
    * @access protected
    * @param string $level
    * @param string $message
@@ -93,13 +100,19 @@ abstract class Mongodb extends BaseModel implements ModelContract {
   
   /**
    * 元素定义
-   * @abstract
-   * @static
    * @access public
    * @return array
    */
   public function elements() {
-    return [];
+    if ($this->elements) {
+      return $this->elements;
+    }
+    Cache::forget('elements_defined_'.$this->entity);
+    $elements = Cache::rememberForever('elements_defined_'.$this->entity, function() {
+      $response = WebSocket::sync_elements(['entity' => $this->entity]);
+      return $response && $response['code'] == 1 ? $response['elements'] : [];
+    });
+    return $this->elements = $elements;
   }
   
   /**
@@ -108,7 +121,7 @@ abstract class Mongodb extends BaseModel implements ModelContract {
    * @param array $attributes
    * @return \YitOS\MModelFactory\Eloquent\Model
    */
-  public function fill(array $attributes) {
+  /*public function fill(array $attributes) {
     $elements = $this->elements();
     if (empty($elements)) {
       return parent::fill($attributes);
@@ -118,16 +131,16 @@ abstract class Mongodb extends BaseModel implements ModelContract {
       if (!isset($elements[$key])) {
         if ($key == 'id') {
           $data['id'] = intval($value);
-        } elseif ($key == 'parents' || $key == 'children') {
+        } elseif ($key == 'parents' || $key == 'children' || $key == 'user') {
           $data[$key] = is_array($value) ? $value : [];
-        } elseif ($key == 'parent_id') {
-          $data['parent_id'] = $value ?: 0;
+        } elseif ($key == 'parent_id' || $key == 'user_id') {
+          $data[$key] = $value ?: '';
         }
       } else {
         $elements[$key]['type'] = isset($elements[$key]['type']) ? $elements[$key]['type'] : $key;
         switch ($elements[$key]['type']) {
           case 'parent_id':
-            $value = $value ?: 0;
+            $value = $value ?: '';
             break;
           case 'integer': 
           case 'boolean':
@@ -156,7 +169,7 @@ abstract class Mongodb extends BaseModel implements ModelContract {
       }
     }
     return parent::fill($data);
-  }
+  }*/
   
   /**
    * 储存数据
@@ -263,46 +276,47 @@ abstract class Mongodb extends BaseModel implements ModelContract {
     }
     
     $this->logs(static::LOG_LEVEL_INFO, '数据同步（下行）开始', $now->format('U'));
+    
     $response = WebSocket::sync_download($params);
-    dd($response);
+    
     if ($response && $response['code'] == 1) {
       $message = '数据同步（下行）成功，成功同步 '.$response['total'].' 条记录';
       $objects = [];
+      $provider = Auth::guard()->getProvider();
       foreach ($response['data'] as $data) {
-        $data['parents'] = [];
-        $data['children'] = [];
+        $account_id = $data['account_id'];
+        unset($data['account_id']);
+        /*$user = $provider->retrieveByCredentials(['id' => $account_id]);
+        if ($user) {
+          $data['user_id'] = $user->getAuthIdentifier();
+          $data['user'] = array_only($user->toArray(),['account_username', 'realname', 'team']);
+          unset($data['user'][$user->getAuthIdentifierName()]);
+        } else {
+          $data['user_id'] = '';
+          $data['user'] = [];
+        }*/
+        $data['user_id'] = $account_id;
+        
         $model = $this->updateOrCreate(['id' => $data['id']], $data);
         $objects[] = $model;
       }
+      
+      foreach ($objects as $object) {
+        $update = [];
+        $parent = $object->where('id', $object->parent_id)->first();
+        if ($parent) {
+          $update['parent_id'] = $parent->getKey();
+          $update['parent'] = array_only($parent->toArray(), ['label', 'link', 'alias']);
+        } else {
+          $update['parent_id'] = '';
+          $update['parent'] = [];
+        }
+        $update['parents'] = $object->parents ? $object->whereIn('id', $object->parents)->pluck($object->getKeyName())->toArray() : [];
+        $update['children'] = $object->children ? $object->whereIn('id', $object->children)->pluck($object->getKeyName())->toArray() : [];
+        $object->update($update);
+      }
       $rec['synchronized_at'] = $now->format('U');
       $this->getSyncTable()->updateOrInsert(['alias' => $this->entity], $rec);
-      
-      $result = true;
-      // 直接父级
-      foreach ($objects as $object) {
-        $parent_id = $object->parent_id;
-        if ($parent_id <= 0) {
-          continue;
-        }
-        $parent = static::where(['id' => $parent_id])->first();
-        if ($parent) {
-          $object->update(['parent_id' => $parent->getKey()]);
-        } else {
-          $object->logs(static::LOG_LEVEL_EMERGENCY, '数据同步（下行）成功，但建立父链索引失败:id:'.$object->id);
-          $result = false;
-        }
-      }
-      
-      if (!$result) {
-        return false;
-      }
-      
-      foreach ($objects as $object) {
-        // 父链
-        $object->update(['parents' => $object->getParentsIds()]);
-        // 子链
-        $object->update(['children' => $object->getChildrenIds()]);
-      }
       
       if (method_exists($this, 'synchronized')) {
         return $this->synchronized($objects) && $this->logs(static::LOG_LEVEL_INFO, $message);
@@ -314,65 +328,5 @@ abstract class Mongodb extends BaseModel implements ModelContract {
       return false;
     }
   }
-  
-  /**
-   * 获得父链编号集
-   * 
-   * @access public
-   * @return array
-   */
-  public function getParentsIds() {
-    $ids = [];
-    if ($this->parent_id != 0) {
-      array_unshift($ids, $this->parent_id);
-      $parent = static::find($this->parent_id);
-      $vs = $parent->getParentsIds();
-      foreach ($vs as $v) {
-        array_unshift($ids, $v);
-      }
-    }
-    return $ids;
-  }
-  
-  /**
-   * 获得子链编号集
-   * 
-   * @access public
-   * @return array
-   */
-  public function getChildrenIds() {
-    $ids = [];
-    $children = static::where('parent_id', $this->getKey())->orderBy('sort_order', 'asc')->orderBy('updated_at', 'asc')->get();
-    foreach ($children as $child) {
-      $ids[] = $child->getKey();
-    }
-    foreach ($children as $child) {
-      $vs = $child->getChildrenIds();
-      foreach ($vs as $v) {
-        $ids[] = $v;
-      }
-    }
-    return $ids;
-  }
-  
-  /**
-   * 下级地址
-   * 
-   * @access public
-   * @return \Illuminate\Database\Eloquent\Relations\HasMany
-   */
-  public function rel_children() {
-    return $this->hasMany('\\'.get_class($this), 'parent_id', '_id');
-  }
-  
-  /**
-   * 上级地址
-   * 
-   * @access public
-   * @return \Illuminate\Database\Eloquent\Relations\BelongsTo
-   */
-  public function rel_parent() {
-    return $this->belongsTo('\\'.get_class($this), 'parent_id');
-  }
-  
+
 }

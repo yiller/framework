@@ -38,14 +38,13 @@ class RSACryptor {
   
   /**
    * 生成RSA加密器实例
-   * 
    * @access public
    * @param string $public_key
    * @param string $private_key
    * @param string $seperator
    * @param integer $size
    */
-  public function __construct($public_key, $private_key, $seperator = '', $size = 256) {
+  public function __construct($public_key, $private_key, $seperator = '', $size = 128) {
     $this->public_key = $public_key;
     $this->private_key = $private_key;
     $this->seperator = $seperator;
@@ -68,12 +67,14 @@ class RSACryptor {
         $temp = '';
         openssl_private_encrypt($v, $temp, $key);
         $arr[$k] = base64_encode($temp);
+        //$arr[$k] = $temp;
       }
       $encrypted = implode($this->seperator, $arr);
     } else {
       openssl_private_encrypt($plain, $encrypted, $key);
       $encrypted = base64_encode($encrypted);
     }
+    //echo base64_decode($encrypted);echo'<br/>';
     return $encrypted;
   }
   
@@ -87,15 +88,26 @@ class RSACryptor {
   public function decrypt($encrypted) {
     $plain = '';
     $key = openssl_pkey_get_public($this->public_key);
+    //echo base64_decode($encrypted);echo '<br/>';
+    //print_r($encrypted);echo '<br/>';
     if ($this->seperator && (false !== strpos($encrypted, $this->seperator))) {
       $arr = explode($this->seperator, $encrypted);
       foreach ($arr as $k => $v) {
         $temp = '';
-        openssl_public_decrypt(base64_decode($v), $temp, $key);
+        //openssl_public_decrypt(base64_decode($v), $temp, $key);
+        /*if (!openssl_public_decrypt(base64_decode($v), $temp, $key)) {
+        while ($msg = openssl_error_string())
+    echo $msg . "<br />\n";
+      }*/
+        //openssl_public_decrypt($v, $temp, $key);
         $arr[$k] = $temp;
       }
       $plain = implode('', $arr);
     } else {
+      /*if (!openssl_public_decrypt(base64_decode($encrypted), $plain, $key)) {
+        while ($msg = openssl_error_string())
+    echo $msg . "<br />\n";
+      }*/
       openssl_public_decrypt(base64_decode($encrypted), $plain, $key);
     }
     return $plain;

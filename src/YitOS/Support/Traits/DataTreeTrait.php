@@ -24,33 +24,23 @@ trait DataTreeTrait {
         !method_exists($this, 'definedBuilder') || !method_exists($this, 'definedElements')) {
       throw new RuntimeException(trans('ui::exception.tree_not_supported'));
     }
-    property_exists($this, 'columns') || $this->columns = [];
-    method_exists($this, 'definedColumns') && $this->columns = $this->definedColumns();
-    if (!is_array($this->columns) || empty($this->columns)) {
-      throw new RuntimeException(trans('ui::exception.tree_not_supported'));
-    }
+    
     $config = [];
     $config['name'] = $this->name;
     $config['data_url'] = property_exists($this, 'dataUrl') ? $this->dataUrl : action('\\'.get_class($this).'@listings');
     
-    $elements = [];
-    foreach ($this->columns as $key => $column) {
-      $column['name'] = $key;
-      if (!isset($column['bind']) || !is_string($column['bind'])) { $column['bind'] = $key; }
-      $elements[] = $column['bind'];
-      $this->columns[$key] = $column;
-    }
-    $elements = array_only_by_sort($this->definedElements(), $elements);
-    if (empty($elements)) {
-      throw new RuntimeException(trans('ui::exception.tree_not_supported'));
-    }
     $config['columns'] = [];
-    foreach ($this->columns as $key => $column) {
-      if (!isset($elements[$column['bind']])) { continue; }
-      $config['columns'][$key] = array_merge($elements[$column['bind']], $column);
+    foreach ($this->definedElements() as $element) {
+      $config['columns'][$element['alias']] = [
+        'name'  => $element['alias'],
+        'label' => $element['name'],
+        'bind'  => $element['alias'],
+      ];
     }
     $config['columns'] = method_exists($this, 'columnsConfigured') ? $this->columnsConfigured($config['columns']) : $config['columns'];
-    
+    if (!$config['columns']) {
+      throw new RuntimeException(trans('ui::exception.tree_not_supported'));
+    }
     $config['add_enabled'] = false;
     if (app('routes')->hasNamedRoute($this->route.'.edit')) {
       $config['add_enabled'] = true;
@@ -122,7 +112,7 @@ trait DataTreeTrait {
     }
     
     $builder = method_exists($this, 'listingsRetrieving') ? $this->listingsRetrieving() : $this->definedBuilder();
-    $parent_id = $request->input('_id', 0);
+    $parent_id = $request->input('_id', '');
     $action = $request->input('action', 'open');
     $listings = [];
 
