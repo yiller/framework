@@ -114,6 +114,14 @@ class YitOS extends Connector {
         $name = $this->original_name;
         $parameters = $this->original_parameters;
         return $this->token() ? ($parameters ? $this->{$name}($parameters) : $this->{$name}()) : [];
+      } elseif (isset($response['expires'])) {
+        $expires = $response['expires'];
+        $token = explode(':', $this->app['request']->session()->get('client_token', ''));
+        if (count($token) == 3) {
+          $token[2] = $expires;
+          $this->app['request']->session()->put('client_token', implode(':', $token));
+        }
+        unset($response['expires']);
       }
       return $response;
     }

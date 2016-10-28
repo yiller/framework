@@ -62,8 +62,6 @@ trait DataFormTrait {
             !View::exists($element['template'])) {
           if ($element['type'] == 'integer') {
             $element['template'] = 'ui::form.string';
-          } elseif ($element['name'] == 'TKD') {
-            $element['template'] = 'ui::form.TKD';
           } else {
             $element['template'] = 'ui::form.'.$element['type'];
           }
@@ -298,12 +296,12 @@ trait DataFormTrait {
     if (!method_exists($this, $method)) {
       throw new RuntimeException(trans('ui::exception.form.handle_not_supported', ['handle' => $method]));
     }
-    $handle = 'beforeData'.studly_case($method);
-    $data = method_exists($this, $handle) ? $this->$handle($request) : $request->all();
+    /*$handle = 'before'.studly_case($method);
+    $data = method_exists($this, $handle) ? $this->$handle($request) : $request->all();*/
     
     $config = method_exists($this, 'formRenderring') ? $this->formRenderring($this->configDF()) : $this->configDF();
-    if ($this->$method($data)) {
-      $handle = 'afterData'.studly_case($method);
+    if ($this->$method($request->all())) {
+      $handle = 'after'.studly_case($method);
       method_exists($this, $handle) && $this->$handle($request, $data);
       $message = property_exists($this, 'handle_'.$method.'_success') ? $this->{'handle_'.$method.'_success'} : trans('ui::form.handle.'.$method.'_success', ['name' => $config['name']]);
       $status = 1;
@@ -319,9 +317,87 @@ trait DataFormTrait {
    * @access protected
    * @param \YitOS\MModelFactory\Eloquent\Model|array $data
    * @return bool
+   * 
+   * @throws \Illuminate\Foundation\Validation\ValidationException
    */
   protected function save($data) {
-    if ($data instanceof \YitOS\MModelFactory\Eloquent\Model) {
+    if (method_exists($this, 'saving')) {
+      $data = $this->saving($data);
+    }
+    // 验证数据
+    $rules = []; $messages = [];
+    $config = method_exists($this, 'formRenderring') ? $this->formRenderring($this->configDF()) : $this->configDF();
+    $sections = $config['sections'];
+    foreach ($sections as $section) {
+      foreach ($section['elements'] as $key => $element) {
+        if (!isset($element['rules'])) {
+          continue;
+        }
+        $rule = $message = [];
+        if (is_string($element['rules'])) {
+          $rule[$key] = $element['rules'];
+        } elseif (is_array($element['rules'])) {
+          $rule = $element['rules'];
+        }
+        if (isset($element['messages'])) {
+          if (is_string($element['messages']) && is_string($element['rules'])) {
+            if (strpos($element['rules'], ':') !== false) {
+              list($k,) = explode(':', $element['rules']);
+              $message[$key.'.'.$k] = $element['messages'];
+            } else {
+              $message[$key.'.'.$element['rules']] = $element['messages'];
+            }
+          } elseif (is_array($element['messages'])) {
+            $message = $element['messages'];
+          }
+        }
+        if (!$rule) {
+          continue;
+        }
+        $rules = array_merge($rules, $rule);
+        $messages = array_merge($messages, $message);
+      }
+    }
+    
+    if (method_exists($this, 'getSaveValidator')) {
+      $validator = $this->getSaveValidator($data, $rules, $messages);
+    } elseif ($rules) {
+      $validator = \Illuminate\Support\Facades\Validator::make($data, $rules, $messages);
+    } else {
+      $validator = null;
+    }
+    
+    $validator && $this->validateWith($validator);
+    
+    // 处理数据保存
+    $builder = $this->definedBuilder();
+    if ($builder instanceof \YitOS\ModelFactory\Eloquent\Mongodb) {
+      $model = null;
+      if (isset($data['_id'])) {
+        $model = $builder->find($data['_id']);
+      }
+      if ($model) {
+        $model = $model->needSyncUpload()->fill($data);
+      } else {
+        $model = $builder->needSyncUpload()->fill($data);
+      }
+      dd($model->save());
+      return $model->save();
+    } else {
+      $_id = '';
+      if (isset($data['_id'])) {
+        $_id = $data['_id'];
+        unset($data['_id']);
+      }
+      if ($_id) {
+        $builder->where('_id', $_id)->update($data);
+      } else {
+        $_id = $builder->insertGetId($data);
+      }
+      $data['_id'] = $_id;
+      return $data;
+    }
+    /*if ($data instanceof \YitOS\MModelFactory\Eloquent\Model) {
       $data->parents = $data->getParentsIds();
       $data->children = $data->getChildrenIds();
       $result = $data->save();
@@ -344,7 +420,7 @@ trait DataFormTrait {
       $_id = $builder->insertGetId($data);
       $data['_id'] = $_id;
       return $data;
-    }
+    }*/
   }
   
 }

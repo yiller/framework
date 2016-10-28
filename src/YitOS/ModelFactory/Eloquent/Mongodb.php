@@ -225,19 +225,19 @@ abstract class Mongodb extends BaseModel implements ModelContract {
     }
     
     $now = Carbon::now();
-    $params = $this->attributes;
-    $params['entity'] = $this->entity;
-    if (isset($params['_id']) && isset($params['id'])) {
-      $params['id'] = intval($params['id']);
-      unset($params['_id']);
+    $entity = $this->entity;
+    $id = $parent_id = $sort_order = 0;
+    $data = $this->attributes;
+    if (isset($data['id'])) {
+      $id = $data['id'];
     }
-    if (isset($params['parent_id'])) {
-      $parent = static::find($params['parent_id']);
-      $parent && $params['parent_id'] = $parent->id;
-    }
+    isset($data['id']) && ($id = intval($data['id']));
+    isset($data['parent_id']) && ($parent = static::find($data['parent_id'])) && ($parent_id = $parent->id);
+    isset($data['sort_order']) && ($sort_order = intval($data['sort_order']));
+    unset($data['_id'], $data['id'], $data['parent_id'], $data['sort_order'], $data['_token'], $data['method']);
     
     $this->logs(static::LOG_LEVEL_INFO, '数据同步（上行）开始', $now->format('U'));
-    $response = WebSocket::sync_upload($params);
+    $response = WebSocket::sync_upload(compact('entity', 'id', 'parent_id', 'sort_order', 'data'));
     dd($response);
     return false;
   }
