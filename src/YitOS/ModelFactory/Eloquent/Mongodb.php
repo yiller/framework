@@ -228,9 +228,7 @@ abstract class Mongodb extends BaseModel implements ModelContract {
     $entity = $this->entity;
     $id = $parent_id = $sort_order = 0;
     $data = $this->attributes;
-    if (isset($data['id'])) {
-      $id = $data['id'];
-    }
+    
     isset($data['id']) && ($id = intval($data['id']));
     isset($data['parent_id']) && ($parent = static::find($data['parent_id'])) && ($parent_id = $parent->id);
     isset($data['sort_order']) && ($sort_order = intval($data['sort_order']));
