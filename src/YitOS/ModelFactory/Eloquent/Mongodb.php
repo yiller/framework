@@ -226,18 +226,41 @@ abstract class Mongodb extends BaseModel implements ModelContract {
     
     $now = Carbon::now();
     $entity = $this->entity;
-    $id = $parent_id = $sort_order = 0;
     $data = $this->attributes;
     
-    isset($data['id']) && ($id = intval($data['id']));
-    isset($data['parent_id']) && ($parent = static::find($data['parent_id'])) && ($parent_id = $parent->id);
-    isset($data['sort_order']) && ($sort_order = intval($data['sort_order']));
-    unset($data['_id'], $data['id'], $data['parent_id'], $data['sort_order'], $data['_token'], $data['method']);
+    $data['id'] = isset($data['_id']) && ($model = static::find($data['_id'])) ? intval($model->id) : 0;
+    $data['parent_id'] = isset($data['parent_id']) && ($parent = static::find($data['parent_id'])) ? intval($parent->id) : 0;
+    $data['sort_order'] = isset($data['sort_order']) ? intval($data['sort_order']) : 0;
+    unset($data['_id'], $data['_token'], $data['method']);
     
     $this->logs(static::LOG_LEVEL_INFO, '数据同步（上行）开始', $now->format('U'));
-    $response = WebSocket::sync_upload(compact('entity', 'id', 'parent_id', 'sort_order', 'data'));
-    dd($response);
-    return false;
+    $response = WebSocket::sync_upload(compact('entity', 'data'));
+    if ($response && $response['code'] == 1) {
+      $message = '数据同步（上行）成功，基库编号： #'.$response['data']['id'];
+      $data = $response['data'];
+      $data['user_id'] = $data['account_id'];
+      unset($data['account_id']);
+      
+      $parent = $this->where('id', $data['parent_id'])->first();
+      if ($parent) {
+        $data['parent_id'] = $parent->getKey();
+        $data['parent'] = array_only($parent->toArray(), ['label', 'link', 'alias']);
+      } else {
+        $data['parent_id'] = '';
+        $data['parent'] = [];
+      }
+      $data['parents'] = $data['parents'] ? $object->whereIn('id', $data['parents'])->pluck($this->getKeyName())->toArray() : [];
+      $data['children'] = $data['children'] ? $object->whereIn('id', $data['children'])->pluck($this->getKeyName())->toArray() : [];
+      
+      if (isset($this->attributes['_id'])) {
+        $data['_id'] = $this->attributes['_id'];
+      }
+      $this->attributes = $data;
+      return true;
+    } else {
+      $this->logs(static::LOG_LEVEL_EMERGENCY, '数据同步（上行）失败，失败原因：'.($response ? $response['message'] : '未知'));
+      return false;
+    }
   }
   
   /**
