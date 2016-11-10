@@ -2,6 +2,8 @@
 
 return [
   'modal' => [
+    'title_create'  => '增加:name',
+    'title_edit'    => '编辑:name（_ID：:__）',
     'button_submit' => '确定提交',
     'button_close'  => '关闭窗口',
   ],

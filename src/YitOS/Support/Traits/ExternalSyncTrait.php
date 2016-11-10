@@ -14,6 +14,25 @@ use Illuminate\Support\Facades\View;
 trait ExternalSyncTrait {
   
   /**
+   * 获得扩展来源列表
+   * @access protected
+   * @param string $alias
+   * @param string $format
+   * @return array
+   */
+  protected function getExternalSourceOptions($alias, $format = '') {
+    $sources = app('db')->table('_external_sources')->where('entities', 'all', [$alias])->pluck('label', 'alias');
+    if ($format == 'single') {
+      return $sources;
+    }
+    $options = [];
+    foreach ($sources as $alias => $label) {
+      $options[] = ['label' => $label, 'value' => $alias];
+    }
+    return $options;
+  }
+  
+  /**
    * 信息同步页面
    * @access public
    * @param \Illuminate\Http\Request $request

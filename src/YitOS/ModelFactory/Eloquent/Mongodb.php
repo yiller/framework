@@ -72,6 +72,15 @@ abstract class Mongodb extends BaseModel implements ModelContract {
   }
   
   /**
+   * 获得实体名字
+   * @access public
+   * @return string
+   */
+  public function getEntity() {
+    return $this->entity;
+  }
+  
+  /**
    * 获得同步配置表
    * @access protected
    * @return \Jenssegers\Mongodb\Collection
@@ -90,12 +99,18 @@ abstract class Mongodb extends BaseModel implements ModelContract {
    */
   protected function logs($level, $message, $timestamp = 0) {
     $timestamp = $timestamp ?: Carbon::now()->format('U');
-    return $this->getConnection()->collection('_sync_logs')->insert([
+    $log = [
       'entity' => $this->entity,
       'level' => $level,
       'message' => $message,
       'timestamp' => $timestamp
-    ]);
+    ];
+    if (app('auth')->user()) {
+      $log['user_id'] = app('auth')->user()->_id;
+    } else {
+      $log['user_id'] = '';
+    }
+    return $this->getConnection()->collection('_sync_logs')->insert($log);
   }
   
   /**
@@ -116,67 +131,11 @@ abstract class Mongodb extends BaseModel implements ModelContract {
   }
   
   /**
-   * 填充对象
-   * @access public
-   * @param array $attributes
-   * @return \YitOS\MModelFactory\Eloquent\Model
-   */
-  /*public function fill(array $attributes) {
-    $elements = $this->elements();
-    if (empty($elements)) {
-      return parent::fill($attributes);
-    }
-    $data = [];
-    foreach ($attributes as $key => $value) {
-      if (!isset($elements[$key])) {
-        if ($key == 'id') {
-          $data['id'] = intval($value);
-        } elseif ($key == 'parents' || $key == 'children' || $key == 'user') {
-          $data[$key] = is_array($value) ? $value : [];
-        } elseif ($key == 'parent_id' || $key == 'user_id') {
-          $data[$key] = $value ?: '';
-        }
-      } else {
-        $elements[$key]['type'] = isset($elements[$key]['type']) ? $elements[$key]['type'] : $key;
-        switch ($elements[$key]['type']) {
-          case 'parent_id':
-            $value = $value ?: '';
-            break;
-          case 'integer': 
-          case 'boolean':
-            $value = intval($value);
-            break;
-          case 'array': 
-          case 'tags':
-            $value = is_array($value) ? $value : [];
-            break;
-          case 'html':
-            $value = trim($value);
-            break;
-          case 'TKD':
-            $value = is_array($value) ? $value : [];
-            $temp = [];
-            foreach ($value as $k => $v) {
-              if (!in_array($k, ['title', 'keywords', 'description'])) { continue; }
-              $temp[$k] = htmlspecialchars(trim($v));
-            }
-            $value = $temp;
-            break;
-          default:
-            $value = htmlspecialchars(trim($value));
-        }
-        $data[$key] = $value;
-      }
-    }
-    return parent::fill($data);
-  }*/
-  
-  /**
    * 储存数据
    * 
    * @access public
    * @param  array  $options
-   * @return bool
+   * @return \YitOS\ModelFactory\Eloquent|bool
    */
   public function save(array $options = []) {
     $query = $this->newQueryWithoutScopes();
@@ -184,7 +143,7 @@ abstract class Mongodb extends BaseModel implements ModelContract {
     if ($this->fireModelEvent('saving') === false) {
       return false;
     }
-    
+
     if ($this->needSyncUpload && !$this->syncUpload()) {
       return false;
     }
@@ -232,9 +191,10 @@ abstract class Mongodb extends BaseModel implements ModelContract {
     $data['parent_id'] = isset($data['parent_id']) && ($parent = static::find($data['parent_id'])) ? intval($parent->id) : 0;
     $data['sort_order'] = isset($data['sort_order']) ? intval($data['sort_order']) : 0;
     unset($data['_id'], $data['_token'], $data['method']);
-    
+
     $this->logs(static::LOG_LEVEL_INFO, '数据同步（上行）开始', $now->format('U'));
     $response = WebSocket::sync_upload(compact('entity', 'data'));
+
     if ($response && $response['code'] == 1) {
       $message = '数据同步（上行）成功，基库编号： #'.$response['data']['id'];
       $data = $response['data'];
@@ -249,14 +209,14 @@ abstract class Mongodb extends BaseModel implements ModelContract {
         $data['parent_id'] = '';
         $data['parent'] = [];
       }
-      $data['parents'] = $data['parents'] ? $object->whereIn('id', $data['parents'])->pluck($this->getKeyName())->toArray() : [];
-      $data['children'] = $data['children'] ? $object->whereIn('id', $data['children'])->pluck($this->getKeyName())->toArray() : [];
+      $data['parents'] = $data['parents'] ? $this->whereIn('id', $data['parents'])->pluck($this->getKeyName())->toArray() : [];
+      $data['children'] = $data['children'] ? $this->whereIn('id', $data['children'])->pluck($this->getKeyName())->toArray() : [];
       
       if (isset($this->attributes['_id'])) {
         $data['_id'] = $this->attributes['_id'];
       }
       $this->attributes = $data;
-      return true;
+      return $this->logs(static::LOG_LEVEL_INFO, $message);
     } else {
       $this->logs(static::LOG_LEVEL_EMERGENCY, '数据同步（上行）失败，失败原因：'.($response ? $response['message'] : '未知'));
       return false;
@@ -307,15 +267,6 @@ abstract class Mongodb extends BaseModel implements ModelContract {
       foreach ($response['data'] as $data) {
         $account_id = $data['account_id'];
         unset($data['account_id']);
-        /*$user = $provider->retrieveByCredentials(['id' => $account_id]);
-        if ($user) {
-          $data['user_id'] = $user->getAuthIdentifier();
-          $data['user'] = array_only($user->toArray(),['account_username', 'realname', 'team']);
-          unset($data['user'][$user->getAuthIdentifierName()]);
-        } else {
-          $data['user_id'] = '';
-          $data['user'] = [];
-        }*/
         $data['user_id'] = $account_id;
         
         $model = $this->updateOrCreate(['id' => $data['id']], $data);

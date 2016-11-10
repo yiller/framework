@@ -31,6 +31,9 @@
   <div class="modal-footer">
     <input type="hidden" name="_token" value="{{ csrf_token() }}">
     <input type="hidden" name="method" value="{{ $method }}">
+    @if ($data)
+    <input type="hidden" name="__" value="{{ $data['_id'] }}">
+    @endif
     <button type="button" data-dismiss="modal" class="btn btn-outline dark">{{ trans('ui::form.modal.button_close') }} </button>
     <button type="submit" class="btn green mt-ladda-btn ladda-button" data-style="expand-left" data-spinner-color="#fff">
       <span class="ladda-label">

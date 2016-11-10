@@ -273,14 +273,30 @@ trait DataFormTrait {
    * 显示编辑表单
    * 
    * @access public
+   * @param \Illuminate\Http\Request $request
    * @return \Illuminate\Http\Response
    */
-  public function edit() {
+  public function edit(Request $request) {
     $data = method_exists($this, 'formRenderring') ? $this->formRenderring($this->configDF()) : $this->configDF();
-    array_key_exists('modal_title', $data) || $data['modal_title'] = trans('ui.dataform.title.create', ['name' => $data['name']]);
     array_key_exists('modal_title_icon', $data) || $data['modal_title_icon'] = 'fa fa-cubes';
     $template = array_key_exists('template', $data) && View::exists($data['template']) ? $data['template'] : 'ui::form.layout';
     $data['data'] = [];
+    $__ = $request->get('__');
+    if ($__) {
+      $builder = $this->definedBuilder();
+      if ($builder instanceof \YitOS\ModelFactory\Eloquent\Mongodb) {
+        $model = $builder->find($__);
+        $data['data'] = $model ? $model->toArray() : [];
+      } else {
+        $object = $builder->where('_id', $__)->first();
+        $data['data'] = $object ? (array)$object : [];
+      }
+    }
+    if ($data['data']) {
+      array_key_exists('modal_title', $data) || $data['modal_title'] = trans('ui::form.modal.title_edit', ['name' => $data['name'], '__' => $__]);
+    } else {
+      array_key_exists('modal_title', $data) || $data['modal_title'] = trans('ui::form.modal.title_create', ['name' => $data['name']]);
+    }
     $data['method'] = 'save';
     return view($template, $data);
   }
@@ -296,13 +312,8 @@ trait DataFormTrait {
     if (!method_exists($this, $method)) {
       throw new RuntimeException(trans('ui::exception.form.handle_not_supported', ['handle' => $method]));
     }
-    /*$handle = 'before'.studly_case($method);
-    $data = method_exists($this, $handle) ? $this->$handle($request) : $request->all();*/
-    
     $config = method_exists($this, 'formRenderring') ? $this->formRenderring($this->configDF()) : $this->configDF();
     if ($this->$method($request->all())) {
-      $handle = 'after'.studly_case($method);
-      method_exists($this, $handle) && $this->$handle($request, $data);
       $message = property_exists($this, 'handle_'.$method.'_success') ? $this->{'handle_'.$method.'_success'} : trans('ui::form.handle.'.$method.'_success', ['name' => $config['name']]);
       $status = 1;
     } else {
@@ -368,59 +379,39 @@ trait DataFormTrait {
     }
     
     $validator && $this->validateWith($validator);
-    
     // 处理数据保存
+    $__ = '';
     $builder = $this->definedBuilder();
     if ($builder instanceof \YitOS\ModelFactory\Eloquent\Mongodb) {
       $model = null;
-      if (isset($data['_id'])) {
-        $model = $builder->find($data['_id']);
+      if (isset($data['__']) && ($model = $builder->find($data['__']))) {
+        unset($data['__']);
+        $data = $model->fill($data)->getAttributes();
+        $builder->exists = true;
       }
-      if ($model) {
-        $model = $model->needSyncUpload()->fill($data);
-      } else {
-        $model = $builder->needSyncUpload()->fill($data);
+      $model = $builder->needSyncUpload()->fill($data);
+      if ($model->save()) {
+        $__ = $model->_id;
+        if ($model->parents) {
+          $builder->pull('children', $__);
+          $builder->whereIn('_id', $model->parents)->push('children', $__, true);
+        }
       }
-      dd($model->save());
-      return $model->save();
     } else {
-      $_id = '';
-      if (isset($data['_id'])) {
-        $_id = $data['_id'];
-        unset($data['_id']);
-      }
-      if ($_id) {
-        $builder->where('_id', $_id)->update($data);
+      $__ = isset($data['__']) ? $data['__'] : '';
+      unset($data['__']);
+      if ($__) {
+        $builder->where('_id', $__)->update($data);
       } else {
-        $_id = $builder->insertGetId($data);
+        $__ = $builder->insertGetId($data);
       }
-      $data['_id'] = $_id;
-      return $data;
     }
-    /*if ($data instanceof \YitOS\MModelFactory\Eloquent\Model) {
-      $data->parents = $data->getParentsIds();
-      $data->children = $data->getChildrenIds();
-      $result = $data->save();
-      
-      $model = $data;
-      while ($result && $parent = $model->rel_parent) {
-        $parent->children = $parent->getChildrenIds();
-        $parent->save();
-        $model = $parent;
-      }
-      return $result;
-    } elseif (isset($data['_id'])) {
-      $builder = $this->definedBuilder();
-      $_id = $data['_id'];
-      unset($data['_id']);
-      $builder->where('_id', $_id)->update($data);
-      return $data;
-    } else {
-      $builder = $this->definedBuilder();
-      $_id = $builder->insertGetId($data);
-      $data['_id'] = $_id;
-      return $data;
-    }*/
+    
+    if ($__ && method_exists($this, 'saved')) {
+      return $this->saved($__);
+    }
+    
+    return $__;
   }
   
 }
