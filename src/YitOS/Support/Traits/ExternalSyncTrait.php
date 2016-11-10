@@ -16,12 +16,12 @@ trait ExternalSyncTrait {
   /**
    * 获得扩展来源列表
    * @access protected
-   * @param string $alias
+   * @param string $entity
    * @param string $format
    * @return array
    */
-  protected function getExternalSourceOptions($alias, $format = '') {
-    $sources = app('db')->table('_external_sources')->where('entities', 'all', [$alias])->pluck('label', 'alias');
+  protected function getExternalSourceOptions($entity, $format = '') {
+    $sources = app('db')->table('_external_sources')->where('entities', 'all', [$entity])->pluck('label', 'alias');
     if ($format == 'single') {
       return $sources;
     }
@@ -30,6 +30,24 @@ trait ExternalSyncTrait {
       $options[] = ['label' => $label, 'value' => $alias];
     }
     return $options;
+  }
+  
+  /**
+   * 获得扩展接口
+   * @access protected
+   * @param string $alias
+   * @return \YitOS\WebSocket\SyncConnector|null
+   */
+  protected function getExternalConnector($alias) {
+    $source = app('db')->table('_external_sources')->where('alias', $alias)->first();
+    if (!$source) {
+      return null;
+    }
+    $connector = app('websocket')->driver($source['class']);
+    if (!$connector || !($connector instanceof \YitOS\WebSocket\SyncConnector)) {
+      return null;
+    }
+    return $connector;
   }
   
   /**
@@ -57,6 +75,7 @@ trait ExternalSyncTrait {
     }
     
     $data['url'] = action('\\'.get_class($this).'@getSync');
+    $data['title'] = isset($data['title']) ? $data['title'].'（_ID：'.$model->_id.'）' : '';
     return view($template, $data);
   }
   
@@ -72,10 +91,12 @@ trait ExternalSyncTrait {
   protected function postSync(Request $request) {
     set_time_limit(360);
     $handle = $request->get('handle', 'detail');
-    $handle == 'listings' || $handle = 'detail';
+    if ($handle != 'listings') {
+      $handle = 'detail';
+    }
     
-    $id = $request->get('id', '');
-    if (!$id && $handle == 'detail') {
+    $__ = $request->get('__', '');
+    if (!$__ && $handle == 'detail') {
       $listings = session('sync.listings', []);
       $listings && $id = array_shift($listings);
       session(['sync.listings' => $listings]);
@@ -83,32 +104,31 @@ trait ExternalSyncTrait {
     if (!method_exists($this, 'getSyncModel')) {
       throw new \RuntimeException(trans('websocket::exception.sync.controller_not_supported'));
     }
-    $model = $this->getSyncModel($id, $handle);
+    $model = $this->getSyncModel($__, $handle);
     if (!$model || !$model instanceof \YitOS\Contracts\WebSocket\ExternalSyncModel || !$model->isExternal()) {
       throw new \RuntimeException(trans('websocket::exception.sync.model_not_supported'));
     }
-    
-    $api = app('websocket')->driver($model->getExternalSource());
-    if (!($api instanceof \YitOS\WebSocket\SyncConnector)) {
+    $connector = $this->getExternalConnector($model->getExternalSource());
+    if (!$connector) {
       return response()->json(['status' => -1, 'message' => trans('websocket::exception.sync.api_not_supported', ['name' => $model->getExternalSource()])]);
     }
     
     $step = $request->get('step', '');
     if ($step == 'initial') { // 初始化，清空SESSION 并验证接口有效性
-      $handle = $this->initialSync($model, $handle);
+      $handle = $this->initialSync($connector, $model, $handle);
     } elseif ($step == 'listings') { // 根据分类获得实体列表
       $page = intval($request->get('page', 1));
-      $handle = $this->listingsSync($api, $model, $page);
+      $handle = $this->listingsSync($connector, $model, $page);
     } elseif ($step == 'detail') { // 准备开始详情同步
       $handle = $this->detailSync($model);
     } elseif ($step == 'info') { // 基本信息
-      $handle = $this->infoSync($api, $model);
+      $handle = $this->infoSync($connector, $model);
     } else {
       $method = $step ? lcfirst(studly_case($step)).'Sync' : 'uiSync';
       if (property_exists($this, $method)) {
         throw new \RuntimeException(trans('websocket::exception.sync.controller_not_supported'));
       }
-      $handle = $this->$method($api, $model, $handle);
+      $handle = $this->$method($connector, $model, $handle);
       if (substr($handle,-4) == 'CONT') {
         $handle = substr($handle,0,-4) . $this->contSync($model);
       }
@@ -119,37 +139,40 @@ trait ExternalSyncTrait {
   /**
    * 显示同步界面
    * @access protected
-   * @param \YitOS\WebSocket\SyncConnector $api
+   * @param \YitOS\WebSocket\SyncConnector $connector
    * @param \YitOS\Contracts\WebSocket\ExternalSyncModel $model
    * @param string $handle
    * @return string
    */
-  protected function uiSync(\YitOS\WebSocket\SyncConnector $api, \YitOS\Contracts\WebSocket\ExternalSyncModel $model, $handle) {
+  protected function uiSync(\YitOS\WebSocket\SyncConnector $connector, \YitOS\Contracts\WebSocket\ExternalSyncModel $model, $handle) {
     $url = action('\\'.get_class($this).'@postSync');
     return view('websocket::js.synchronize', compact('url', 'handle', 'model'))->render();
   }
   
   /**
    * 同步初始化
+   * @access protected
+   * @param \YitOS\WebSocket\SyncConnector $connector
    * @param \YitOS\Contracts\WebSocket\ExternalSyncModel $model
-   * @param string $mode
+   * @param string $handle
    * @return string
    */
-  protected function initialSync(\YitOS\Contracts\WebSocket\ExternalSyncModel $model, $mode) {
+  protected function initialSync(\YitOS\WebSocket\SyncConnector $connector, \YitOS\Contracts\WebSocket\ExternalSyncModel $model, $handle) {
     session(['sync.listings' => [],'sync.size' => 0, 'sync.entity' => '']);
     $cells = [
       ['width' => '10%', 'text' => '实体标识'],
-      ['width' => '10%', 'text' => '实体来源'],
+      ['width' => '15%', 'text' => '实体来源'],
       ['width' => '', 'text' => '同步实体'],
       ['width' => '25%', 'text' => '同步结果'],
     ];
-    $handle  = "table_head(".json_encode($cells).");";
-    if ($mode == 'listings') {
-      $handle .= "table_line('".$model->_id."', 'loading', ".json_encode([$model->getExternalId(), $model->getExternalSource(), '【分类列表】'.$model->title, '获得列表']).");";
+    if ($handle == 'listings') {
+      $handle  = "table_head(".json_encode($cells).");";
+      $handle .= "table_line('".$model->_id."', 'loading', ".json_encode([$model->getExternalId(), $connector->label, '【分类列表】'.$model->title, '获得列表']).");";
       $handle .= "modal_layout();";
       $handle .= "listings('".$model->_id."', 1);";
     } else {
-      $handle .= "table_line('".$model->_id."', 'loading', ".json_encode([$model->getExternalId(), $model->getExternalSource(), '【实体详情】'.$model->title, '获得详情']).");";
+      $handle  = "table_head(".json_encode($cells).");";
+      $handle .= "table_line('".$model->_id."', 'loading', ".json_encode([$model->getExternalId(), $connector->label, '【实体详情】'.$model->title, '获得详情']).");";
       $handle .= "modal_layout();";
       $handle .= "detail('".$model->_id."', 'detail');";
     }
@@ -159,12 +182,12 @@ trait ExternalSyncTrait {
   /**
    * 远程同步列表
    * @access protected
-   * @param \YitOS\WebSocket\SyncConnector $api
+   * @param \YitOS\WebSocket\SyncConnector $connector
    * @param \YitOS\Contracts\WebSocket\ExternalSyncModel $model
    * @param integer $page
    * @return string
    */
-  protected function listingsSync(\YitOS\WebSocket\SyncConnector $api, \YitOS\Contracts\WebSocket\ExternalSyncModel $model, $page) {
+  protected function listingsSync(\YitOS\WebSocket\SyncConnector $connector, \YitOS\Contracts\WebSocket\ExternalSyncModel $model, $page) {
     $now = Carbon::now()->format('U');
     if ($model->synchronized_at && $now - $model->synchronized_at < 600) {
       $handle  = "line_status('".$model->_id."', 'warning', ".json_encode(['', '', '', '忽略，上次同步时间：'.Carbon::createFromTimestamp($model->synchronized_at)->format(Carbon::DEFAULT_TO_STRING_FORMAT)]).");";

@@ -111,7 +111,7 @@ var ExternalSynchronize = function() {
   var initial = function() {
     var params = {'step': 'initial'};
     params.handle = '{{ $handle }}';
-    params.id = '{{ $model->_id }}';
+    params.__ = '{{ $model->_id }}';
     
     if ($('#ajax-modal .modal-body table').size() == 0) {
       $('#ajax-modal .modal-body').append('<table class="table table-striped table-bordered table-hover"><thead><tr role="row" class="heading"><th width="3%"></th></tr></thead><tbody></tbody></table>');
@@ -148,7 +148,7 @@ var ExternalSynchronize = function() {
     FETCH({
       'step': 'listings',
       'handle': 'listings',
-      'id': id,
+      '__': id,
       'page': parseInt(page)
     });
   };

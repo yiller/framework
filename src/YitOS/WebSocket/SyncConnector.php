@@ -11,6 +11,12 @@ use RuntimeException;
 abstract class SyncConnector extends Connector {
   
   /**
+   * 接口名称
+   * @var string
+   */
+  public $label = '未知同步接口';
+  
+  /**
    * 当前应用程序
    * @var \Illuminate\Foundation\Application
    */

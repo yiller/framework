@@ -32,6 +32,8 @@ class Manager extends BaseManager {
       return $this->callCustomCreator($driver);
     } elseif (method_exists($this, $method)) {
       return $this->$method();
+    } elseif (class_exists($driver)) {
+      return new $driver($this->app);
     } else {
       return $this->makeDefaultConnector($driver);
     }
