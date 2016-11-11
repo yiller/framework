@@ -60,9 +60,10 @@ class YitOS extends Connector {
    * 获得当前请求网关地址
    * @access protected
    * @param string $name
+   * @param array $parameters
    * @return string
    */
-  protected function gateway($name = '') {
+  protected function gateway($name = '', $parameters = []) {
     $url = $this->gateway;
     if (empty($name)) {
       return $url;

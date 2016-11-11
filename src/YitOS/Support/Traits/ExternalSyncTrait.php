@@ -196,7 +196,8 @@ trait ExternalSyncTrait {
     }
     $id = $model->getExternalId();
     $entities = []; $next = false;
-    list($entities, $next) = $api->listings(compact('id', 'page'));
+    list($entities, $next) = $connector->listings(compact('id', 'page'));
+    dd($entities);
     $listings = session('sync.listings', []);
     if ($entities) {
       foreach ($entities as $entity) {

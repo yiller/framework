@@ -70,16 +70,17 @@ class Connector {
    * 获得当前请求网关地址
    * @access protected
    * @param string $name
+   * @param array $parameters
    * @return string
    */
-  protected function gateway($name = '') {
+  protected function gateway($name = '', $parameters = []) {
     if (empty($name)) {
       return $this->gateway;
     }
     
     $method = 'get'.Str::studly($name).'Gateway';
     if (method_exists($this, $method)) {
-      return $this->$method();
+      return $this->$method($parameters);
     }
     
     return $this->gateway.$name;
@@ -154,7 +155,7 @@ class Connector {
    * @throw \RuntimeException
    */
   public function __call($name, $parameters) {
-    $url = $this->gateway($name);
+    $url = $this->gateway($name, $parameters ? $parameters[0] : []);
     $method = $this->method($name);
     $request = $this->beforeRequest($name, $parameters ? $parameters[0] : []);
     if (extension_loaded('curl')) {

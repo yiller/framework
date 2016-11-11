@@ -76,14 +76,14 @@ abstract class SyncConnector extends Connector {
   
   /**
    * 获得当前请求网关地址
-   * 
    * @access protected
    * @param string $name
+   * @param array $parameters
    * @return string
    * 
    * @throw \RuntimeException
    */
-  protected function gateway($name = '') {
+  protected function gateway($name = '', $parameters = []) {
     if (empty($name)) {
       throw new RuntimeException(trans('websocket::exception.sync.interface_not_supported', ['interface' => 'none']));
     }
