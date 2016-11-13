@@ -197,11 +197,11 @@ trait ExternalSyncTrait {
     $id = $model->getExternalId();
     $entities = []; $next = false;
     list($entities, $next) = $connector->listings(compact('id', 'page'));
-    dd($entities);
     $listings = session('sync.listings', []);
     if ($entities) {
       foreach ($entities as $entity) {
         $entity['category'] = array_only($model->toArray(), ['_id', 'label']);
+        dd($entity);
         $id = $this->saveSyncModel($entity);
         $id && !in_array($id, $listings) && $listings[] = $id;
       }
