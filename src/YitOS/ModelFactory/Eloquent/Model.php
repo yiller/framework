@@ -18,6 +18,13 @@ interface Model {
   public function initial($entity, $duration);
   
   /**
+   * 数据同步（上行）
+   * @access public
+   * @return bool
+   */
+  public function syncUpload();
+  
+  /**
    * 数据同步（下行）
    * @access public
    * @return bool

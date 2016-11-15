@@ -105,6 +105,7 @@ trait ExternalSyncTrait {
       throw new \RuntimeException(trans('websocket::exception.sync.controller_not_supported'));
     }
     $model = $this->getSyncModel($__, $handle);
+    dd($model);
     if (!$model || !$model instanceof \YitOS\Contracts\WebSocket\ExternalSyncModel || !$model->isExternal()) {
       throw new \RuntimeException(trans('websocket::exception.sync.model_not_supported'));
     }
@@ -201,8 +202,8 @@ trait ExternalSyncTrait {
     if ($entities) {
       foreach ($entities as $entity) {
         $entity['category'] = array_only($model->toArray(), ['_id', 'label']);
-        dd($entity);
-        $id = $this->saveSyncModel($entity);
+        $id = $this->saveEntityModel($entity);
+        dd($id);
         $id && !in_array($id, $listings) && $listings[] = $id;
       }
     } else {

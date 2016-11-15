@@ -2,7 +2,7 @@
 
 use InvalidArgumentException;
 use Illuminate\Support\Manager as BaseManager;
-use YitOS\ModelFactory\Eloquent\Model as ModelContract;
+use Illuminate\Database\Eloquent\Model as ModelContract;
 
 /**
  * Mongodb模型工厂类
@@ -36,6 +36,8 @@ class Manager extends BaseManager {
     if (isset($this->customCreators[$driver])) {
       return $this->callCustomCreator($driver);
     }
+    $factory = $this->app['config']['model.factory'];
+    dd($factory);
     $mapping = $this->app['config']['model.mapping'];
     $classname = $driver;
     $duration = 0;
@@ -58,8 +60,8 @@ class Manager extends BaseManager {
       throw new InvalidArgumentException(trans('modelfactory::exception.mapping_not_found', compact('classname')));
     }
 
-    $instance = new $classname();
-    if (!($instance instanceof ModelContract)) {
+    $model = new $classname();
+    if (!($model instanceof ModelContract)) {
       throw new InvalidArgumentException(trans('modelfactory::exception.mapping_not_found', compact('classname')));
     }
 

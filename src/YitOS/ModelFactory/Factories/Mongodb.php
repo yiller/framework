@@ -1,4 +1,4 @@
-<?php namespace YitOS\ModelFactory\Eloquent;
+<?php namespace YitOS\ModelFactory\Factories;
 
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Log;
@@ -15,7 +15,7 @@ use YitOS\ModelFactory\Eloquent\Model as ModelContract;
  * @author yiller <tech.yiller@yitos.cn>
  * @package YitOS\ModelFactory\Eloquent
  * @abstract
- * @see \YitOS\ModelFactory\Eloquent\Model
+ * @see \YitOS\ModelFactory\Eloquent\Factories
  * @see \Jenssegers\Mongodb\Eloquent\Model
  * @see \Illuminate\Database\Eloquent\Model
  */
