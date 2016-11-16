@@ -8,27 +8,4 @@
  */
 interface Model {
   
-  /**
-   * 初始化模型数据
-   * @access public
-   * @param string $entity
-   * @param integer $duration
-   * @return \YitOS\ModelFactory\Eloquent\Model
-   */
-  public function initial($entity, $duration);
-  
-  /**
-   * 数据同步（上行）
-   * @access public
-   * @return bool
-   */
-  public function syncUpload();
-  
-  /**
-   * 数据同步（下行）
-   * @access public
-   * @return bool
-   */
-  public function syncDownload();
-  
 }

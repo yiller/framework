@@ -1,26 +1,19 @@
 <?php namespace YitOS\ModelFactory\Factories;
 
+use BadMethodCallException;
+use InvalidArgumentException;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
-use Jenssegers\Mongodb\Eloquent\Model as BaseModel;
-use YitOS\Support\Relations\ParentChildrenTrait;
 use YitOS\Support\Facades\WebSocket;
-use YitOS\ModelFactory\Eloquent\Model as ModelContract;
 
 /**
- * Mongodb数据库模型基类
+ * 定义数据库工厂接口
  *
  * @author yiller <tech.yiller@yitos.cn>
- * @package YitOS\ModelFactory\Eloquent
- * @abstract
- * @see \YitOS\ModelFactory\Eloquent\Factories
- * @see \Jenssegers\Mongodb\Eloquent\Model
- * @see \Illuminate\Database\Eloquent\Model
+ * @package YitOS\ModelFactory\Factories
  */
-abstract class Mongodb extends BaseModel implements ModelContract {
-  use ParentChildrenTrait;
+abstract class Factory {
   
   const LOG_LEVEL_DEBUG     = 'debug';
   const LOG_LEVEL_INFO      = 'info';
@@ -41,16 +34,16 @@ abstract class Mongodb extends BaseModel implements ModelContract {
   protected $duration = 0;
   
   /**
-   * 所有属性都允许批量赋值
-   * @var bool
+   * 数据模型对象
+   * @var \Illuminate\Database\Eloquent\Model
    */
-  protected static $unguarded = true;
+  protected $model = null;
   
   /**
    * 是否需要同步上传
    * @var bool 
    */
-  protected $needSyncUpload = false;
+  protected $needSyncUpload = true;
   
   /**
    * 实体结构
@@ -59,58 +52,50 @@ abstract class Mongodb extends BaseModel implements ModelContract {
   protected $elements = [];
   
   /**
-   * 初始化模型数据
+   * 初始化工厂
    * @access public
    * @param string $entity
    * @param integer $duration
-   * @return \YitOS\ModelFactory\Eloquent\Mongodb
+   * @param string $classname
+   * @return \YitOS\ModelFactory\Factories\Factory
    */
-  public function initial($entity, $duration) {
-    $this->entity = $entity;
+  public function __construct($entity, $duration, $classname) {
+    if (!class_exists($classname)) {
+      throw new InvalidArgumentException();
+    }
+    $this->model = new $classname();
+    $this->entity = trim($entity);
     $this->duration = intval($duration);
     return $this;
   }
   
   /**
-   * 获得实体名字
-   * @access public
+   * 获得实体别名
+   * @accss public
    * @return string
    */
-  public function getEntity() {
+  public function entity() {
     return $this->entity;
   }
   
   /**
-   * 获得同步配置表
-   * @access protected
-   * @return \Jenssegers\Mongodb\Collection
+   * 获得数据模型
+   * @access public
+   * @return mixed
    */
-  protected function getSyncTable() {
-    return $this->getConnection()->collection('_sync');
+  public function model() {
+    return $this->model;
   }
   
   /**
-   * 插入同步日志
-   * @access protected
-   * @param string $level
-   * @param string $message
-   * @param integer $timestamp
-   * @return bool
+   * 是否需要同步上传
+   * @accss public
+   * @param bool $need
+   * @return \YitOS\MModelFactory\Factories\Factory
    */
-  protected function logs($level, $message, $timestamp = 0) {
-    $timestamp = $timestamp ?: Carbon::now()->format('U');
-    $log = [
-      'entity' => $this->entity,
-      'level' => $level,
-      'message' => $message,
-      'timestamp' => $timestamp
-    ];
-    if (app('auth')->user()) {
-      $log['user_id'] = app('auth')->user()->_id;
-    } else {
-      $log['user_id'] = '';
-    }
-    return $this->getConnection()->collection('_sync_logs')->insert($log);
+  public function needSyncUpload($need = true) {
+    $this->needSyncUpload = $need;
+    return $this;
   }
   
   /**
@@ -131,45 +116,48 @@ abstract class Mongodb extends BaseModel implements ModelContract {
   }
   
   /**
-   * 储存数据
-   * 
-   * @access public
-   * @param  array  $options
-   * @return \YitOS\ModelFactory\Eloquent|bool
+   * 插入同步日志
+   * @access protected
+   * @param string $level
+   * @param string $message
+   * @param integer $timestamp
+   * @return bool
    */
-  public function save(array $options = []) {
-    $query = $this->newQueryWithoutScopes();
-    
-    if ($this->fireModelEvent('saving') === false) {
+  protected function logs($level, $message, $timestamp = 0) {
+    $logger = $this->tableLogs();
+    if (!$logger) {
       return false;
     }
-
-    if ($this->needSyncUpload && !$this->syncUpload()) {
-      return false;
-    }
-    
-    if ($this->exists) {
-      $saved = $this->performUpdate($query, $options);
+    $timestamp = $timestamp ?: Carbon::now()->format('U');
+    $log = [
+      'entity' => $this->entity,
+      'level' => $level,
+      'message' => $message,
+      'timestamp' => $timestamp
+    ];
+    if (app('auth')->user()) {
+      $log['user_id'] = app('auth')->user()->getAuthIdentifier();
     } else {
-      $saved = $this->performInsert($query, $options);
+      $log['user_id'] = '';
     }
-    
-    if ($saved) {
-      $this->finishSave($options);
-    }
-    
-    return $saved;
+    return $this->tableLogs()->insert($log);
   }
   
   /**
-   * 是否需要同步上传
-   * @accss public
-   * @param bool $need
-   * @return \YitOS\MModelFactory\Eloquent\Model
+   * 储存数据
+   * @access public
+   * @param  \Illuminate\Database\Eloquent\Model $model
+   * @return bool
    */
-  public function needSyncUpload($need = true) {
-    $this->needSyncUpload = $need;
-    return $this;
+  public function save($model) {
+    if (!$model || !$model instanceof $this->model) {
+      return false;
+    }
+    $this->model = $model;
+    if ($this->needSyncUpload && !$this->syncUpload()) {
+      return false;
+    }
+    return $this->model->save();
   }
   
   /**
@@ -178,14 +166,14 @@ abstract class Mongodb extends BaseModel implements ModelContract {
    * @return bool
    */
   public function syncUpload() {
-    if (!$this->entity) {
+    if (!$this->entity || !$this->tableSync()) {
       Log::notice('数据同步（上行）中止，未定义实体类型', ['classname' => get_class($this)]);
       return true;
     }
     
     $now = Carbon::now();
     $entity = $this->entity;
-    $data = $this->attributes;
+    $data = $this->model->getAttributes();
     
     $data['id'] = isset($data['_id']) && ($model = static::find($data['_id'])) ? intval($model->id) : 0;
     $data['parent_id'] = isset($data['parent_id']) && ($parent = static::find($data['parent_id'])) ? intval($parent->id) : 0;
@@ -194,14 +182,18 @@ abstract class Mongodb extends BaseModel implements ModelContract {
 
     $this->logs(static::LOG_LEVEL_INFO, '数据同步（上行）开始', $now->format('U'));
     $response = WebSocket::sync_upload(compact('entity', 'data'));
-
+    
     if ($response && $response['code'] == 1) {
       $message = '数据同步（上行）成功，基库编号： #'.$response['data']['id'];
       $data = $response['data'];
-      $data['user_id'] = $data['account_id'];
+      $provider = app('auth')->getProvider();
+      $account_id = $data['account_id'];
       unset($data['account_id']);
+      $user = $provider->retrieveByCredentials(['id' => $account_id]);
+      $data['user_id'] = $user ? $user->getAuthIdentifier() : '';
+      $data['user'] = $user ? array_only($user->toArray(), ['account_username', 'realname', 'mobile', 'team']) : [];
       
-      $parent = $this->where('id', $data['parent_id'])->first();
+      $parent = $this->model->where('id', $data['parent_id'])->first();
       if ($parent) {
         $data['parent_id'] = $parent->getKey();
         $data['parent'] = array_only($parent->toArray(), ['label', 'link', 'alias']);
@@ -209,18 +201,15 @@ abstract class Mongodb extends BaseModel implements ModelContract {
         $data['parent_id'] = '';
         $data['parent'] = [];
       }
-      $data['parents'] = $data['parents'] ? $this->whereIn('id', $data['parents'])->pluck($this->getKeyName())->toArray() : [];
-      $data['children'] = $data['children'] ? $this->whereIn('id', $data['children'])->pluck($this->getKeyName())->toArray() : [];
-      
-      if (isset($this->attributes['_id'])) {
-        $data['_id'] = $this->attributes['_id'];
-      }
-      $this->attributes = $data;
+      $data['parents'] = $data['parents'] ? $this->model->whereIn('id', $data['parents'])->pluck($this->getKeyName())->toArray() : [];
+      $data['children'] = $data['children'] ? $this->model->whereIn('id', $data['children'])->pluck($this->getKeyName())->toArray() : [];
+      $this->model->fill($data);
       return $this->logs(static::LOG_LEVEL_INFO, $message);
     } else {
       $this->logs(static::LOG_LEVEL_EMERGENCY, '数据同步（上行）失败，失败原因：'.($response ? $response['message'] : '未知'));
       return false;
     }
+    return false;
   }
   
   /**
@@ -231,14 +220,14 @@ abstract class Mongodb extends BaseModel implements ModelContract {
    */
   public function syncDownload() {
     $timestamp = 0;
-    if (!$this->entity) {
+    if (!$this->entity || !$this->tableSync()) {
       Log::notice('数据同步（下行）中止，未定义实体类型', ['classname' => get_class($this)]);
       return true;
     }
 
     $now = Carbon::now();
     $params = ['entity' => $this->entity];
-    $rec = $this->getSyncTable()->where('alias', $this->entity)->first();
+    $rec = $this->tableSync()->where('alias', $this->entity)->first();
     if (!$rec) { // 没有配置同步，第一次同步
       $timestamp = 0;
       $duration = $this->duration;
@@ -259,17 +248,17 @@ abstract class Mongodb extends BaseModel implements ModelContract {
     $this->logs(static::LOG_LEVEL_INFO, '数据同步（下行）开始', $now->format('U'));
     
     $response = WebSocket::sync_download($params);
-    
     if ($response && $response['code'] == 1) {
       $message = '数据同步（下行）成功，成功同步 '.$response['total'].' 条记录';
       $objects = [];
-      $provider = Auth::guard()->getProvider();
+      $provider = app('auth')->getProvider();
       foreach ($response['data'] as $data) {
         $account_id = $data['account_id'];
         unset($data['account_id']);
-        $data['user_id'] = $account_id;
-        
-        $model = $this->updateOrCreate(['id' => $data['id']], $data);
+        $user = $provider->retrieveByCredentials(['id' => $account_id]);
+        $data['user_id'] = $user ? $user->getAuthIdentifier() : '';
+        $data['user'] = $user ? array_only($user->toArray(), ['account_username', 'realname', 'mobile', 'team']) : [];
+        $model = $this->model->updateOrCreate(['id' => $data['id']], $data);
         $objects[] = $model;
       }
       
@@ -288,7 +277,7 @@ abstract class Mongodb extends BaseModel implements ModelContract {
         $object->update($update);
       }
       $rec['synchronized_at'] = $now->format('U');
-      $this->getSyncTable()->updateOrInsert(['alias' => $this->entity], $rec);
+      $this->tableSync()->updateOrInsert(['alias' => $this->entity], $rec);
       
       if (method_exists($this, 'synchronized')) {
         return $this->synchronized($objects) && $this->logs(static::LOG_LEVEL_INFO, $message);
@@ -300,5 +289,37 @@ abstract class Mongodb extends BaseModel implements ModelContract {
       return false;
     }
   }
-
+  
+  /**
+   * 魔术调用
+   * @access public
+   * @param string $method
+   * @param array $parameters
+   * @return mixed
+   * 
+   * @throw BadMethodCallException
+   */
+  public function __call($method, $parameters) {
+    if (!$this->model || !$this->model instanceof \Illuminate\Database\Eloquent\Model) {
+      throw new BadMethodCallException(trans('modelfactory::exception.method_not_exists', compact('method')));
+    }
+    return call_user_func_array([$this->model, $method], $parameters);
+  }
+  
+  /**
+   * 获得同步配置表
+   * @abstract
+   * @access protected
+   * @return mixed
+   */
+  abstract protected function tableSync();
+  
+  /**
+   * 获得同步日志表
+   * @abstract
+   * @access protected
+   * @return mixed
+   */
+  abstract protected function tableLogs();
+  
 }

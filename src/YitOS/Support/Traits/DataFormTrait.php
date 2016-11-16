@@ -284,7 +284,7 @@ trait DataFormTrait {
     $__ = $request->get('__');
     if ($__) {
       $builder = $this->definedBuilder();
-      if ($builder instanceof \YitOS\ModelFactory\Eloquent\Mongodb) {
+      if ($builder instanceof \YitOS\ModelFactory\Factories\Factory) {
         $model = $builder->find($__);
         $data['data'] = $model ? $model->toArray() : [];
       } else {
@@ -382,18 +382,19 @@ trait DataFormTrait {
     // 处理数据保存
     $__ = '';
     $builder = $this->definedBuilder();
-    if ($builder instanceof \YitOS\ModelFactory\Eloquent\Mongodb) {
+    if ($builder instanceof \YitOS\ModelFactory\Factories\Factory) {
       $model = null;
       if (isset($data['__']) && ($model = $builder->find($data['__']))) {
         unset($data['__']);
-        $data = $model->fill($data)->getAttributes();
-        $builder->exists = true;
+        $model = $model->fill($data);
+      } else {
+        unset($data['__']);
+        $model = $builder->model()->fill($data);
       }
-      $model = $builder->needSyncUpload()->fill($data);
-      if ($model->save()) {
+      if ($builder->save($model)) {
         $__ = $model->_id;
         if ($model->parents) {
-          $builder->pull('children', $__);
+          $builder->where('children', 'all', [$__])->pull('children', $__);
           $builder->whereIn('_id', $model->parents)->push('children', $__, true);
         }
       }

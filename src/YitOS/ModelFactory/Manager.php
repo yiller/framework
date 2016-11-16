@@ -13,6 +13,10 @@ use Illuminate\Database\Eloquent\Model as ModelContract;
  */
 class Manager extends BaseManager {
   
+  protected $options = [
+    'Mongo' => \YitOS\ModelFactory\Factories\MongoFactory::class,
+  ];
+  
   /**
    * 获得默认的模型类名
    * 
@@ -36,36 +40,34 @@ class Manager extends BaseManager {
     if (isset($this->customCreators[$driver])) {
       return $this->callCustomCreator($driver);
     }
-    $factory = $this->app['config']['model.factory'];
-    dd($factory);
+    $factory = $this->getDefaultDriver();
+    if (!is_string($factory)) {
+      throw new InvalidArgumentException(trans('modelfactory::exception.mapping_not_found', compact('driver')));
+    }
+    if (isset($this->options[$factory])) {
+      $factory = $this->options[$factory];
+    }
+    if (empty($factory) || !class_exists($factory)) {
+      throw new InvalidArgumentException(trans('modelfactory::exception.mapping_not_found', compact('driver')));
+    }
+    
     $mapping = $this->app['config']['model.mapping'];
     $classname = $driver;
     $duration = 0;
-    $initial = false;
     if (array_key_exists($driver, $mapping)) {
       if (is_string($mapping[$driver])) {
         $classname = $mapping[$driver];
-        $initial = true;
-      } elseif (is_array($mapping[$driver]) && count($mapping[$driver]) > 1) {
-        $classname = $mapping[$driver][0];
-        $duration = intval($mapping[$driver][1]);
-        $initial = true;
       } elseif (is_array($mapping[$driver])) {
         $classname = $mapping[$driver][0];
-        $initial = true;
+        (count($mapping[$driver]) > 1) && ($duration = intval($mapping[$driver][1]));
       }
     }
     
-    if (!class_exists($classname)) {
-      throw new InvalidArgumentException(trans('modelfactory::exception.mapping_not_found', compact('classname')));
+    try {
+      $instance = new $factory($driver, $duration, $classname);
+    } catch(InvalidArgumentException $e) {
+      throw new InvalidArgumentException(trans('modelfactory::exception.mapping_not_found', compact('driver')));
     }
-
-    $model = new $classname();
-    if (!($model instanceof ModelContract)) {
-      throw new InvalidArgumentException(trans('modelfactory::exception.mapping_not_found', compact('classname')));
-    }
-
-    $initial && $instance->initial($driver, $duration);
     $instance->syncDownload();
     return $instance;
   }

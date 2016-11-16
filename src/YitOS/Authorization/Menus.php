@@ -111,7 +111,7 @@ class Menus {
    */
   public static function load($class) {
     $instance = new static();
-    $menu = M($class);
+    $menu = M($class)->model();
     if ($menu instanceof \YitOS\Contracts\Authorization\Menu) {
       $instance->classname(get_class($menu))->menus($menu::getRootMenus());
     }
