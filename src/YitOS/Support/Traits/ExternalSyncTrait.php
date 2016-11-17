@@ -59,7 +59,7 @@ trait ExternalSyncTrait {
    * @throws RuntimeException
    */
   public function getSync(Request $request) {
-    if (!method_exists($this, 'synchronizing') || !method_exists($this, 'getSyncModel')) {
+    if (!method_exists($this, 'synchronizing') || !method_exists($this, 'getSyncBuilder')) {
       throw new \RuntimeException(trans('websocket::exception.sync.controller_not_supported'));
     }
     
@@ -201,8 +201,12 @@ trait ExternalSyncTrait {
     if ($entities) {
       foreach ($entities as $entity) {
         $entity['category_id'] = $model->_id;
-        $entity['category'] = array_only($model->toArray(), ['label']);
-        dd($entity);
+        $model = $this->getSyncBuilder()->model();
+        if ($this->getSyncBuilder()->save($model->fill($entity))) {
+          dd($model);
+        } else {
+          dd('ERROR');
+        }
         $id = $this->saveEntityModel($entity);
         dd($id);
         $id && !in_array($id, $listings) && $listings[] = $id;

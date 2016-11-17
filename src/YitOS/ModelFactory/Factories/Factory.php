@@ -84,7 +84,11 @@ abstract class Factory {
    * @return mixed
    */
   public function model() {
-    return $this->model;
+    if (!$this->model) {
+      return null;
+    }
+    $classname = get_class($this->model);
+    return new $classname();
   }
   
   /**
@@ -179,10 +183,14 @@ abstract class Factory {
     $data['parent_id'] = isset($data['parent_id']) && ($parent = static::find($data['parent_id'])) ? intval($parent->id) : 0;
     $data['sort_order'] = isset($data['sort_order']) ? intval($data['sort_order']) : 0;
     unset($data['_id'], $data['_token'], $data['method']);
-
+    
+    if (method_exists($this->model, 'filterSyncUpload') && !($data = $this->model->filterSyncUpload($data))) {
+      return false;
+    }
+    
     $this->logs(static::LOG_LEVEL_INFO, '数据同步（上行）开始', $now->format('U'));
     $response = WebSocket::sync_upload(compact('entity', 'data'));
-    
+    dd($response);
     if ($response && $response['code'] == 1) {
       $message = '数据同步（上行）成功，基库编号： #'.$response['data']['id'];
       $data = $response['data'];
