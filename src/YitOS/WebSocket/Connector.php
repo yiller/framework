@@ -170,7 +170,7 @@ class Connector {
       curl_setopt($ch, CURLOPT_URL,            $url);
       curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
       curl_setopt($ch, CURLOPT_HEADER,         false);
-      curl_setopt($ch, CURLOPT_TIMEOUT,        30);
+      curl_setopt($ch, CURLOPT_TIMEOUT,        300);
       curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
       if (property_exists($this, 'use_cookie') && $this->use_cookie) {
         $cookie = storage_path('app'.DIRECTORY_SEPARATOR.'connector'.DIRECTORY_SEPARATOR.parse_url($url)['host'].'.cookie.jar');
