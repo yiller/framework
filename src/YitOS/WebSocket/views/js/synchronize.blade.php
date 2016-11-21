@@ -156,7 +156,7 @@ var ExternalSynchronize = function() {
   var detail = function() {
     var params = {'step':'detail','handle':'detail'};
     if (arguments.length > 0) {
-      params.id = arguments[0];
+      params.__ = arguments[0];
     }
     if (arguments.length > 1) {
       params.step = arguments[1];

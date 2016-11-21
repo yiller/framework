@@ -98,7 +98,7 @@ trait ExternalSyncTrait {
     $__ = $request->get('__', '');
     if (!$__ && $handle == 'detail') {
       $listings = session('sync.listings', []);
-      $listings && $id = array_shift($listings);
+      $listings && $__ = array_shift($listings);
       session(['sync.listings' => $listings]);
     }
     if (!method_exists($this, 'getSyncBuilder')) {
@@ -120,15 +120,19 @@ trait ExternalSyncTrait {
       $page = intval($request->get('page', 1));
       $handle = $this->listingsSync($connector, $model, $page);
     } elseif ($step == 'detail') { // 准备开始详情同步
-      $handle = $this->detailSync($model);
+      $handle = $this->detailSync($connector, $model);
     } elseif ($step == 'info') { // 基本信息
       $handle = $this->infoSync($connector, $model);
     } else {
       $method = $step ? lcfirst(studly_case($step)).'Sync' : 'uiSync';
-      if (property_exists($this, $method)) {
+      if ($method == 'uiSync') {
+        $handle = $this->uiSync($model, $handle);
+      } elseif (method_exists($connector, $method)) {
+        $handle = $connector->$method($connector, $model);
+      } else {
         throw new \RuntimeException(trans('websocket::exception.sync.controller_not_supported'));
       }
-      $handle = $this->$method($connector, $model, $handle);
+      
       if (substr($handle,-4) == 'CONT') {
         $handle = substr($handle,0,-4) . $this->contSync($model);
       }
@@ -139,12 +143,11 @@ trait ExternalSyncTrait {
   /**
    * 显示同步界面
    * @access protected
-   * @param \YitOS\WebSocket\SyncConnector $connector
    * @param \YitOS\Contracts\WebSocket\ExternalSyncModel $model
    * @param string $handle
    * @return string
    */
-  protected function uiSync(\YitOS\WebSocket\SyncConnector $connector, \YitOS\Contracts\WebSocket\ExternalSyncModel $model, $handle) {
+  protected function uiSync(\YitOS\Contracts\WebSocket\ExternalSyncModel $model, $handle) {
     $url = action('\\'.get_class($this).'@postSync');
     return view('websocket::js.synchronize', compact('url', 'handle', 'model'))->render();
   }
@@ -211,7 +214,6 @@ trait ExternalSyncTrait {
     } else {
       $next = false;
     }
-    dd($listings);
     session(['sync.listings' => $listings]);
     if ($next) {
       $handle  = "line_status('".$model->_id."', 'loading', ".json_encode(['', '', '', '分类列表第 '.$page.' 页抓取成功']).");";
@@ -230,18 +232,19 @@ trait ExternalSyncTrait {
   /**
    * 远程同步详情（开始）
    * @access protected
+   * @param \YitOS\WebSocket\SyncConnector $connector
    * @param \YitOS\Contracts\WebSocket\ExternalSyncModel $model
    * @return string
    */
-  protected function detailSync(\YitOS\Contracts\WebSocket\ExternalSyncModel $model) {
-    $title = '【实体详情】'.$model->title;
+  protected function detailSync(\YitOS\WebSocket\SyncConnector $connector, \YitOS\Contracts\WebSocket\ExternalSyncModel $model) {
+    $title = '【实体详情】'.$model->name['zh-cn'];
     $listings = session('sync.listings', []);
     if (session('sync.entity', '')) {
       $size = intval(session('sync.size', 0));
       $no = str_pad($size - count($listings),strlen($size.''),'0',STR_PAD_LEFT).'/'.str_pad($size,strlen($size.''),'0',STR_PAD_LEFT);
       $title .= '（'.$no.'）';
     }
-    $handle  = "table_line('".$model->_id."', 'loading', ".json_encode([$model->getExternalId(), $model->getExternalSource(), $title, '获得基本信息']).");";
+    $handle  = "table_line('".$model->_id."', 'loading', ".json_encode([$model->getExternalId(), $connector->label, $title, '获得基本信息']).");";
     $handle .= "modal_layout();";
     $handle .= "detail('".$model->_id."', 'info')";
     return $handle;
@@ -250,28 +253,33 @@ trait ExternalSyncTrait {
   /**
    * 远程同步详情（信息）
    * @access protected
-   * @param \YitOS\WebSocket\SyncConnector $api
+   * @param \YitOS\WebSocket\SyncConnector $connector
    * @param \YitOS\Contracts\WebSocket\ExternalSyncModel $model
    * @return string
    */
-  protected function infoSync(\YitOS\WebSocket\SyncConnector $api, \YitOS\Contracts\WebSocket\ExternalSyncModel $model) {
+  protected function infoSync(\YitOS\WebSocket\SyncConnector $connector, \YitOS\Contracts\WebSocket\ExternalSyncModel $model) {
     $now = Carbon::now()->format('U');
-    $info = $api->detail(['id' => $model->getExternalId()]);
-    if ($info && $model->fill($info)->save()) {
-      if (method_exists($this, 'extraSync')) { // 需要更多的同步细节
-        $handle  = "line_status('".$model->_id."', 'loading', ".json_encode(['', '', '', '正在同步额外详情']).");";
-        $handle .= "detail('".$model->_id."', 'extra')";
+    $info = $connector->detail(['id' => $model->getExternalId()]);
+    if (is_array($info) && $info) {
+      $success = $model->fill($info)->save();
+    } elseif (is_array($info)) {
+      $success = true;
+    } else {
+      $success = false;
+    }
+    
+    if ($success) {
+      if (method_exists($connector, 'custom')) {
+        $handle = $connector->custom($model);
       } else {
         $handle  = "line_status('".$model->_id."', 'success', ".json_encode(['', '', '', '保存基本信息成功']).");";
         $handle .= $this->contSync($model);
       }
-    } elseif ($info) {
-      $handle  = "line_status('".$model->_id."', 'danger', ".json_encode(['', '', '', '保存基本信息失败']).");";
-      $handle .= $this->contSync($model);
     } else {
       $handle  = "line_status('".$model->_id."', 'danger', ".json_encode(['', '', '', '获取基本信息失败']).");";
       $handle .= $this->contSync($model);
     }
+    
     return $handle;
   }
   
@@ -286,16 +294,16 @@ trait ExternalSyncTrait {
       $model->synchronized_at = Carbon::now()->format('U');
       $model->save();
     }
-    $id = trim(session('sync.entity', ''));
-    if (!$id) { // 并非列表，结束同步
+    $__ = trim(session('sync.entity', ''));
+    if (!$__) { // 并非列表，结束同步
       return 'enable_buttons();';
     }
     
-    $category = $this->getSyncModel($id, 'listings');
     $listings = session('sync.listings', []);
     if ($listings) { // 还有实体未同步
       return 'detail();';
     } else { // 同步已完成
+      $category = $this->getSyncBuilder('listings')->find($__);
       $category->synchronized_at = Carbon::now()->format('U');
       $category->save();
       return "enable_buttons();";

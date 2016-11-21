@@ -189,7 +189,7 @@ abstract class Factory {
     $data['sort_order'] = isset($data['sort_order']) ? intval($data['sort_order']) : 0;
     unset($data['_id'], $data['_token'], $data['method']);
     
-    if (method_exists($this->model, 'filterSyncUpload') && !($data = $this->model->filterSyncUpload($data))) {
+    if (method_exists($this->model, 'syncUploading') && !($data = $this->model->syncUploading($data))) {
       return false;
     }
     
@@ -214,6 +214,10 @@ abstract class Factory {
       }
       $data['parents'] = $data['parents'] ? $this->model->whereIn('id', $data['parents'])->pluck($this->getKeyName())->toArray() : [];
       $data['children'] = $data['children'] ? $this->model->whereIn('id', $data['children'])->pluck($this->getKeyName())->toArray() : [];
+      
+      if (method_exists($this->model, 'syncUploaded')) {
+        $data = $this->model->syncUploaded($data);
+      }
       
       $model = $this->model->where('id', $data['id'])->first();
       if ($model) {
