@@ -201,19 +201,17 @@ trait ExternalSyncTrait {
     if ($entities) {
       foreach ($entities as $entity) {
         $entity['category_id'] = $model->_id;
-        $model = $this->getSyncBuilder()->model();
-        if ($this->getSyncBuilder()->save($model->fill($entity))) {
-          dd($model);
-        } else {
-          dd('ERROR');
+        $instance = $this->getSyncBuilder()->save($entity);
+        if (!$instance) {
+          continue;
         }
-        $id = $this->saveEntityModel($entity);
-        dd($id);
-        $id && !in_array($id, $listings) && $listings[] = $id;
+        !in_array($instance->_id, $listings) && $listings[] = $instance->_id;
+        break;
       }
     } else {
       $next = false;
     }
+    dd($listings);
     session(['sync.listings' => $listings]);
     if ($next) {
       $handle  = "line_status('".$model->_id."', 'loading', ".json_encode(['', '', '', '分类列表第 '.$page.' 页抓取成功']).");";

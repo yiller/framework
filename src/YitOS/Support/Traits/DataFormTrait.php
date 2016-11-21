@@ -312,8 +312,10 @@ trait DataFormTrait {
     if (!method_exists($this, $method)) {
       throw new RuntimeException(trans('ui::exception.form.handle_not_supported', ['handle' => $method]));
     }
+    
+    $data = method_exists($this, 'get'.studly_case($method).'Data') ? $this->{'get'.studly_case($method).'Data'}() : $request->all();
     $config = method_exists($this, 'formRenderring') ? $this->formRenderring($this->configDF()) : $this->configDF();
-    if ($this->$method($request->all())) {
+    if ($this->$method($data)) {
       $message = property_exists($this, 'handle_'.$method.'_success') ? $this->{'handle_'.$method.'_success'} : trans('ui::form.handle.'.$method.'_success', ['name' => $config['name']]);
       $status = 1;
     } else {
@@ -332,9 +334,8 @@ trait DataFormTrait {
    * @throws \Illuminate\Foundation\Validation\ValidationException
    */
   protected function save($data) {
-    if (method_exists($this, 'saving')) {
-      $data = $this->saving($data);
-    }
+    $builder = $this->definedBuilder();
+    
     // 验证数据
     $rules = []; $messages = [];
     $config = method_exists($this, 'formRenderring') ? $this->formRenderring($this->configDF()) : $this->configDF();
@@ -381,38 +382,27 @@ trait DataFormTrait {
     $validator && $this->validateWith($validator);
     // 处理数据保存
     $__ = '';
-    $builder = $this->definedBuilder();
-    if ($builder instanceof \YitOS\ModelFactory\Factories\Factory) {
-      $model = null;
+    $model = $builder->save($data);
+    if ($model) {
+      $__ = $model->_id;
+      if ($model->parents) {
+        $builder->where('children', 'all', [$__])->pull('children', $__);
+        $builder->whereIn('_id', $model->parents)->push('children', $__, true);
+      }
+      if (method_exists($builder->model(), 'modelSaved')) {
+        return $builder->model()->modelSaved($__);
+      }
+    }
+    return $__;
+    
+      /*$model = null;
       if (isset($data['__']) && ($model = $builder->find($data['__']))) {
         unset($data['__']);
         $model = $model->fill($data);
       } else {
         unset($data['__']);
         $model = $builder->model()->fill($data);
-      }
-      if ($builder->save($model)) {
-        $__ = $model->_id;
-        if ($model->parents) {
-          $builder->where('children', 'all', [$__])->pull('children', $__);
-          $builder->whereIn('_id', $model->parents)->push('children', $__, true);
-        }
-      }
-    } else {
-      $__ = isset($data['__']) ? $data['__'] : '';
-      unset($data['__']);
-      if ($__) {
-        $builder->where('_id', $__)->update($data);
-      } else {
-        $__ = $builder->insertGetId($data);
-      }
-    }
-    
-    if ($__ && method_exists($this, 'saved')) {
-      return $this->saved($__);
-    }
-    
-    return $__;
+      }*/
   }
   
 }

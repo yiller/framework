@@ -111,7 +111,7 @@ abstract class Factory {
     if ($this->elements) {
       return $this->elements;
     }
-    Cache::forget('elements_defined_'.$this->entity);
+    //Cache::forget('elements_defined_'.$this->entity);
     $elements = Cache::rememberForever('elements_defined_'.$this->entity, function() {
       $response = WebSocket::sync_elements(['entity' => $this->entity]);
       return $response && $response['code'] == 1 ? $response['elements'] : [];
@@ -150,18 +150,23 @@ abstract class Factory {
   /**
    * 储存数据
    * @access public
-   * @param  \Illuminate\Database\Eloquent\Model $model
-   * @return bool
+   * @param  array $data
+   * @return \Illuminate\Database\Eloquent\Model
    */
-  public function save($model) {
-    if (!$model || !$model instanceof $this->model) {
-      return false;
+  public function save($data) {
+    if (isset($data['__']) && $model = $this->model->find($data['__'])) {
+      unset($data['__']);
+      $instance = $model->fill($data);
+    } else {
+      unset($data['__']);
+      $instance = $this->model()->fill($data);
     }
-    $this->model = $model;
-    if ($this->needSyncUpload && !$this->syncUpload()) {
-      return false;
+    if ($this->needSyncUpload) {
+      $this->model = $instance;
+      return $this->syncUpload() ? $this->model : null;
+    } else {
+      return $instance->save() ? $instance : null;
     }
-    return $this->model->save();
   }
   
   /**
@@ -179,8 +184,8 @@ abstract class Factory {
     $entity = $this->entity;
     $data = $this->model->getAttributes();
     
-    $data['id'] = isset($data['_id']) && ($model = static::find($data['_id'])) ? intval($model->id) : 0;
-    $data['parent_id'] = isset($data['parent_id']) && ($parent = static::find($data['parent_id'])) ? intval($parent->id) : 0;
+    $data['id'] = isset($data['_id']) && ($model = $this->model->find($data['_id'])) ? intval($model->id) : 0;
+    $data['parent_id'] = isset($data['parent_id']) && ($parent = $this->model->find($data['parent_id'])) ? intval($parent->id) : 0;
     $data['sort_order'] = isset($data['sort_order']) ? intval($data['sort_order']) : 0;
     unset($data['_id'], $data['_token'], $data['method']);
     
@@ -190,7 +195,6 @@ abstract class Factory {
     
     $this->logs(static::LOG_LEVEL_INFO, '数据同步（上行）开始', $now->format('U'));
     $response = WebSocket::sync_upload(compact('entity', 'data'));
-    dd($response);
     if ($response && $response['code'] == 1) {
       $message = '数据同步（上行）成功，基库编号： #'.$response['data']['id'];
       $data = $response['data'];
@@ -200,7 +204,6 @@ abstract class Factory {
       $user = $provider->retrieveByCredentials(['id' => $account_id]);
       $data['user_id'] = $user ? $user->getAuthIdentifier() : '';
       $data['user'] = $user ? array_only($user->toArray(), ['account_username', 'realname', 'mobile', 'team']) : [];
-      
       $parent = $this->model->where('id', $data['parent_id'])->first();
       if ($parent) {
         $data['parent_id'] = $parent->getKey();
@@ -211,7 +214,22 @@ abstract class Factory {
       }
       $data['parents'] = $data['parents'] ? $this->model->whereIn('id', $data['parents'])->pluck($this->getKeyName())->toArray() : [];
       $data['children'] = $data['children'] ? $this->model->whereIn('id', $data['children'])->pluck($this->getKeyName())->toArray() : [];
-      $this->model->fill($data);
+      
+      $model = $this->model->where('id', $data['id'])->first();
+      if ($model) {
+        $this->model = $model;
+      }
+      
+      if (!$this->model->fill($data)->save()) {
+        $this->logs(static::LOG_LEVEL_EMERGENCY, '数据同步（上行）失败，失败原因：数据保存出错');
+      }
+      $related = isset($response['related']) ? $response['related'] : [];
+      foreach ($related as $alias => $recs) {
+        foreach ($recs as $k => $rec) {
+          $instance = M($alias)->where('id', $k)->first();
+          $instance && $instance->update($rec);
+        }
+      }
       return $this->logs(static::LOG_LEVEL_INFO, $message);
     } else {
       $this->logs(static::LOG_LEVEL_EMERGENCY, '数据同步（上行）失败，失败原因：'.($response ? $response['message'] : '未知'));
