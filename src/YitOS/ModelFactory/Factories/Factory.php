@@ -105,18 +105,27 @@ abstract class Factory {
   /**
    * 元素定义
    * @access public
+   * @param string $name
    * @return array
    */
-  public function elements() {
-    if ($this->elements) {
+  public function elements($name = '') {
+    if (!$this->elements) {
+      //Cache::forget('elements_defined_'.$this->entity);
+      $elements = Cache::rememberForever('elements_defined_'.$this->entity, function() {
+        $response = WebSocket::sync_elements(['entity' => $this->entity]);
+        return $response && $response['code'] == 1 ? $response['elements'] : [];
+      });
+      $this->elements = $elements;
+    }
+    if (!$name) {
       return $this->elements;
     }
-    //Cache::forget('elements_defined_'.$this->entity);
-    $elements = Cache::rememberForever('elements_defined_'.$this->entity, function() {
-      $response = WebSocket::sync_elements(['entity' => $this->entity]);
-      return $response && $response['code'] == 1 ? $response['elements'] : [];
-    });
-    return $this->elements = $elements;
+    foreach ($this->elements as $element) {
+      if ($element['alias'] == $name) {
+        return $element;
+      }
+    }
+    return [];
   }
   
   /**
@@ -202,8 +211,14 @@ abstract class Factory {
       $account_id = $data['account_id'];
       unset($data['account_id']);
       $user = $provider->retrieveByCredentials(['id' => $account_id]);
-      $data['user_id'] = $user ? $user->getAuthIdentifier() : '';
-      $data['user'] = $user ? array_only($user->toArray(), ['account_username', 'realname', 'mobile', 'team']) : [];
+      if ($user) {
+        $data['user_id'] = $user->getAuthIdentifier();
+        $data['user'] = array_only($user->toArray(), ['account_username', 'realname', 'mobile']);
+        $data['user']['team'] = array_only($user->team, ['name', 'alias']);
+      } else {
+        $data['user_id'] = '';
+        $data['user'] = [];
+      }
       $parent = $this->model->where('id', $data['parent_id'])->first();
       if ($parent) {
         $data['parent_id'] = $parent->getKey();
@@ -286,8 +301,14 @@ abstract class Factory {
         $account_id = $data['account_id'];
         unset($data['account_id']);
         $user = $provider->retrieveByCredentials(['id' => $account_id]);
-        $data['user_id'] = $user ? $user->getAuthIdentifier() : '';
-        $data['user'] = $user ? array_only($user->toArray(), ['account_username', 'realname', 'mobile', 'team']) : [];
+        if ($user) {
+          $data['user_id'] = $user->getAuthIdentifier();
+          $data['user'] = array_only($user->toArray(), ['account_username', 'realname', 'mobile']);
+          $data['user']['team'] = array_only($user->team, ['name', 'alias']);
+        } else {
+          $data['user_id'] = '';
+          $data['user'] = [];
+        }
         $model = $this->model->updateOrCreate(['id' => $data['id']], $data);
         $objects[] = $model;
       }

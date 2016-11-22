@@ -89,7 +89,7 @@ trait ExternalSyncTrait {
    * @throws RuntimeException
    */
   protected function postSync(Request $request) {
-    set_time_limit(360);
+    set_time_limit(0);
     $handle = $request->get('handle', 'detail');
     if ($handle != 'listings') {
       $handle = 'detail';
@@ -128,7 +128,9 @@ trait ExternalSyncTrait {
       if ($method == 'uiSync') {
         $handle = $this->uiSync($model, $handle);
       } elseif (method_exists($connector, $method)) {
-        $handle = $connector->$method($connector, $model);
+        extract($connector->$method($model));
+        $instance = $this->getSyncBuilder()->save($model->getAttributes());
+        $instance || $handle = "line_status('".$model->_id."', 'danger', ".json_encode(['', '', '', '额外操作失败']).");CONT";
       } else {
         throw new \RuntimeException(trans('websocket::exception.sync.controller_not_supported'));
       }
@@ -169,13 +171,33 @@ trait ExternalSyncTrait {
       ['width' => '25%', 'text' => '同步结果'],
     ];
     if ($handle == 'listings') {
+      $column = $this->getSyncBuilder('listings')->elements('label');
+      $languages = app('auth')->user()->team['languages'];
+      if ($languages && $model->label && is_array($model->label)) {
+        $label = '';
+        foreach ($languages as $language) {
+          if (isset($model->label[$language]) && $model->label[$language]) { $label = $model->label[$language]; break; }
+        }
+      } else {
+        $label = $model->label;
+      }
       $handle  = "table_head(".json_encode($cells).");";
-      $handle .= "table_line('".$model->_id."', 'loading', ".json_encode([$model->getExternalId(), $connector->label, '【分类列表】'.$model->title, '获得列表']).");";
+      $handle .= "table_line('".$model->_id."', 'loading', ".json_encode([$model->getExternalId(), $connector->label, '【分类列表】'.$label, '获得列表']).");";
       $handle .= "modal_layout();";
       $handle .= "listings('".$model->_id."', 1);";
     } else {
+      $column = $this->getSyncBuilder('detail')->elements('name');
+      $languages = app('auth')->user()->team['languages'];
+      if ($languages && $model->name && is_array($model->name)) {
+        $label = '';
+        foreach ($languages as $language) {
+          if (isset($model->name[$language]) && $model->name[$language]) { $label = $model->name[$language]; break; }
+        }
+      } else {
+        $label = $model->name;
+      }
       $handle  = "table_head(".json_encode($cells).");";
-      $handle .= "table_line('".$model->_id."', 'loading', ".json_encode([$model->getExternalId(), $connector->label, '【实体详情】'.$model->title, '获得详情']).");";
+      $handle .= "table_line('".$model->_id."', 'loading', ".json_encode([$model->getExternalId(), $connector->label, '【实体详情】'.$label, '获得详情']).");";
       $handle .= "modal_layout();";
       $handle .= "detail('".$model->_id."', 'detail');";
     }
@@ -192,7 +214,7 @@ trait ExternalSyncTrait {
    */
   protected function listingsSync(\YitOS\WebSocket\SyncConnector $connector, \YitOS\Contracts\WebSocket\ExternalSyncModel $model, $page) {
     $now = Carbon::now()->format('U');
-    if ($model->synchronized_at && $now - $model->synchronized_at < 600) {
+    if ($model->synchronized_at && $now - $model->synchronized_at < 1) {
       $handle  = "line_status('".$model->_id."', 'warning', ".json_encode(['', '', '', '忽略，上次同步时间：'.Carbon::createFromTimestamp($model->synchronized_at)->format(Carbon::DEFAULT_TO_STRING_FORMAT)]).");";
       $handle .= $this->contSync();
       return $handle;
@@ -209,7 +231,6 @@ trait ExternalSyncTrait {
           continue;
         }
         !in_array($instance->_id, $listings) && $listings[] = $instance->_id;
-        break;
       }
     } else {
       $next = false;
@@ -237,7 +258,17 @@ trait ExternalSyncTrait {
    * @return string
    */
   protected function detailSync(\YitOS\WebSocket\SyncConnector $connector, \YitOS\Contracts\WebSocket\ExternalSyncModel $model) {
-    $title = '【实体详情】'.$model->name['zh-cn'];
+    $column = $this->getSyncBuilder('detail')->elements('name');
+    $languages = app('auth')->user()->team['languages'];
+    if ($languages && $model->name && is_array($model->name)) {
+      $label = '';
+      foreach ($languages as $language) {
+        if (isset($model->name[$language]) && $model->name[$language]) { $label = $model->name[$language]; break; }
+      }
+    } else {
+      $label = $model->name;
+    }
+    $title = '【实体详情】'.$label;
     $listings = session('sync.listings', []);
     if (session('sync.entity', '')) {
       $size = intval(session('sync.size', 0));

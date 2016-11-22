@@ -35,6 +35,7 @@ trait DataTreeTrait {
         'name'  => $element['alias'],
         'label' => $element['name'],
         'bind'  => $element['alias'],
+        'multi_language' => (boolean)$element['multi_language']
       ];
     }
     $config['columns'] = method_exists($this, 'columnsConfigured') ? $this->columnsConfigured($config['columns']) : $config['columns'];
@@ -149,6 +150,15 @@ trait DataTreeTrait {
           $bind = $column['bind'];
           $func = isset($column['handle']) ? $column['handle'] : function($value, $attrs) { return $value; };
           $value = isset($attributes[$bind]) ? $func($attributes[$bind], $attributes) : $func('', $attributes);
+          // 多语言支持
+          $languages = app('auth')->user()->team['languages'];
+          if ($languages && $value && is_array($value)) {
+            $v = '';
+            foreach ($languages as $language) {
+              if (isset($value[$language]) && $value[$language]) { $v = $value[$language]; break; }
+            }
+            $value = $v;
+          }
           $value = array_key_exists('align', $column) ? ('<span style="display:block;text-align:'.$column['align'].';">'.$value.'</span>') : $value;
           if ($first_cell) {
             $value = '<span style="display:block;text-indent:'.($level*2).'em;">'.$value.'</span>';
@@ -184,7 +194,7 @@ trait DataTreeTrait {
                 if ($mode == 'normal') {
                   $actions .= '<li><a href="'.$link.'"><i class="'.$icon.'"></i> '.$label.' </a></li>';
                 } else {
-                  $actions .= '<li><a'.($mode=='full'?' data-width="full"':'').' data-url="'.$link.'" data-toggle="modal" class="modal-toggler"><i class="'.$icon.'"></i> '.$label.' </a></li>';
+                  $actions .= '<li><a'.($mode=='full'?' data-width="full"':'').' data-url="'.$link.'" data-toggle="modal" data-static="true" class="modal-toggler"><i class="'.$icon.'"></i> '.$label.' </a></li>';
                 }
               }
             }
