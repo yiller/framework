@@ -105,7 +105,9 @@ var ExternalSynchronize = function() {
       }
       line_status('', status, ['', '', '', proc]);
     };
-    RPC(params, callback, error);
+    window.setTimeout(function() {
+      RPC(params, callback, error);
+    }, 1000);
   };
   // 初始化调用
   var initial = function() {
