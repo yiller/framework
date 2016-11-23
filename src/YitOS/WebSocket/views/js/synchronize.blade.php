@@ -9,12 +9,14 @@ var ExternalSynchronize = function() {
       params._token = '{{ csrf_token() }}';
     }
     $.post(url, params, function(data) {
-      if (data.handle != undefined) {
-        eval(data.handle);
-        return;
-      }
-      enable_buttons();
-      if (handle_callback != null) handle_callback(data);
+      window.setTimeout(function() {
+        if (data.handle != undefined) {
+          eval(data.handle);
+          return;
+        }
+        enable_buttons();
+        if (handle_callback != null) handle_callback(data);
+      }, 1000);
     }).error(function() {
       enable_buttons();
       if (handle_error != null) handle_error();
@@ -105,9 +107,7 @@ var ExternalSynchronize = function() {
       }
       line_status('', status, ['', '', '', proc]);
     };
-    window.setTimeout(function() {
-      RPC(params, callback, error);
-    }, 1000);
+    RPC(params, callback, error);
   };
   // 初始化调用
   var initial = function() {

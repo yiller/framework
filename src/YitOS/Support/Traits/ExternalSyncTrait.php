@@ -220,24 +220,19 @@ trait ExternalSyncTrait {
       return $handle;
     }
     $id = $model->getExternalId();
-    $entities = []; $next = false;
-    list($entities, $next) = $connector->listings(compact('id', 'page'));
+    $next = true;
+    $entity = $connector->listings(compact('id', 'page'));
     $listings = session('sync.listings', []);
-    if ($entities) {
-      foreach ($entities as $entity) {
-        $entity['category_id'] = $model->_id;
-        $instance = $this->getSyncBuilder()->save($entity);
-        if (!$instance) {
-          continue;
-        }
-        !in_array($instance->_id, $listings) && $listings[] = $instance->_id;
-      }
-    } else {
+    if (!$entity) {
       $next = false;
+    } else {
+      $entity['category_id'] = $model->_id;
+      $instance = $this->getSyncBuilder()->save($entity);
+      $instance && !in_array($instance->_id, $listings) && $listings[] = $instance->_id;
     }
     session(['sync.listings' => $listings]);
     if ($next) {
-      $handle  = "line_status('".$model->_id."', 'loading', ".json_encode(['', '', '', '分类列表第 '.$page.' 页抓取成功']).");";
+      $handle  = "line_status('".$model->_id."', 'loading', ".json_encode(['', '', '', '产品数量统计中（'.$page.'）']).");";
       $handle .= "listings('".$model->_id."',".($page+1).");";
     } else {
       session([
