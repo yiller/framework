@@ -32,8 +32,8 @@ class Manager extends BaseManager {
       return $this->callCustomCreator($driver);
     } elseif (method_exists($this, $method)) {
       return $this->$method();
-    } elseif (class_exists($driver)) {
-      return new $driver($this->app);
+    } elseif (class_exists($driver) && ($instance = new $driver($this->app)) && ($instance instanceof \YitOS\WebSocket\SyncConnector)) {
+      return $instance;
     } else {
       return $this->makeDefaultConnector($driver);
     }

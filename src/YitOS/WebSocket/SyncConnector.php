@@ -17,6 +17,12 @@ abstract class SyncConnector extends Connector {
   public $label = '未知同步接口';
   
   /**
+   * 接口别名
+   * @var string
+   */
+  public $alias = 'unknown';
+  
+  /**
    * 当前应用程序
    * @var \Illuminate\Foundation\Application
    */
@@ -31,6 +37,33 @@ abstract class SyncConnector extends Connector {
   public function __construct($app) {
     $this->app = $app;
   }
+  
+  /**
+   * 获得实体列表和下一页相关信息
+   * @access public
+   * @param string $url
+   * @param integer $page
+   * @return array
+   */
+  public function listings($url, $page = 1) {
+    $category_id = $this->getExternalId($url, 'listings');
+    if (!$category_id) {
+      return [];
+    }
+    $category = ['external' => ['enabled' => 1, 'source' => $this->alias, 'url' => $url, 'id' => $category_id]];
+    
+    dd($category);
+  }
+  
+  /**
+   * 根据URL提取实体扩展编号
+   * @abstract
+   * @access protected
+   * @param string $url
+   * @param string $type
+   * @return string
+   */
+  abstract protected function getExternalId($url, $type = 'listings');
   
   /**
    * 获得第三方扩展键名

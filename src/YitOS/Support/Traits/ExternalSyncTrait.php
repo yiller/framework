@@ -4,6 +4,8 @@ use Carbon\Carbon;
 use RuntimeException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\View;
+use YitOS\WebSocket\SyncConnector as SyncConnectorContract;
+use YitOS\Contracts\WebSocket\ExternalSyncModel as SyncModelContract;
 
 /**
  * 数据第三方远程同步分离类
@@ -44,10 +46,33 @@ trait ExternalSyncTrait {
       return null;
     }
     $connector = app('websocket')->driver($source['class']);
-    if (!$connector || !($connector instanceof \YitOS\WebSocket\SyncConnector)) {
-      return null;
+    if ($connector instanceof SyncConnectorContract) {
+      $connector->label = $source['label'] ?: $connector->label;
+      $connector->alias = $source['alias'] ?: $connector->alias;
+    } else {
+      $connector = null;
     }
     return $connector;
+  }
+  
+  /**
+   * 获得实体名字
+   * @access protected
+   * @param \YitOS\Contracts\WebSocket\ExternalSyncModel $model
+   * @return string
+   */
+  protected function getExternalLabel(SyncModelContract $model) {
+    $languages = app('auth')->user()->team['languages'];
+    $key = $model->getExternalDisplayName();
+    if ($languages && $model->$key && is_array($model->$key)) {
+      $label = '';
+      foreach ($languages as $language) {
+        if (isset($model->$key[$language]) && $model->$key[$language]) { $label = $model->$key[$language]; break; }
+      }
+    } else {
+      $label = $model->$key;
+    }
+    return $label;
   }
   
   /**
@@ -65,7 +90,7 @@ trait ExternalSyncTrait {
     
     $data = $this->synchronizing($request);
     $model = isset($data['model']) ? $data['model'] : null;
-    if (!$model || !$model instanceof \YitOS\Contracts\WebSocket\ExternalSyncModel || !$model->isExternal()) {
+    if (!$model || !$model instanceof SyncModelContract || !$model->isExternal()) {
       throw new \RuntimeException(trans('websocket::exception.sync.model_not_supported'));
     }
     
@@ -89,7 +114,7 @@ trait ExternalSyncTrait {
    * @throws RuntimeException
    */
   protected function postSync(Request $request) {
-    set_time_limit(0);
+    @set_time_limit(0);
     $handle = $request->get('handle', 'detail');
     if ($handle != 'listings') {
       $handle = 'detail';
@@ -105,7 +130,7 @@ trait ExternalSyncTrait {
       throw new \RuntimeException(trans('websocket::exception.sync.controller_not_supported'));
     }
     $model = $this->getSyncBuilder($handle)->find($__);
-    if (!$model || !$model instanceof \YitOS\Contracts\WebSocket\ExternalSyncModel || !$model->isExternal()) {
+    if (!$model || !$model instanceof SyncModelContract || !$model->isExternal()) {
       throw new \RuntimeException(trans('websocket::exception.sync.model_not_supported'));
     }
     $connector = $this->getExternalConnector($model->getExternalSource());
@@ -166,36 +191,17 @@ trait ExternalSyncTrait {
     session(['sync.listings' => [],'sync.size' => 0, 'sync.entity' => '']);
     $cells = [
       ['width' => '10%', 'text' => '实体标识'],
-      ['width' => '15%', 'text' => '实体来源'],
+      ['width' => '20%', 'text' => '实体来源'],
       ['width' => '', 'text' => '同步实体'],
       ['width' => '25%', 'text' => '同步结果'],
     ];
+    $label = $this->getExternalLabel($model);
     if ($handle == 'listings') {
-      $column = $this->getSyncBuilder('listings')->elements('label');
-      $languages = app('auth')->user()->team['languages'];
-      if ($languages && $model->label && is_array($model->label)) {
-        $label = '';
-        foreach ($languages as $language) {
-          if (isset($model->label[$language]) && $model->label[$language]) { $label = $model->label[$language]; break; }
-        }
-      } else {
-        $label = $model->label;
-      }
       $handle  = "table_head(".json_encode($cells).");";
       $handle .= "table_line('".$model->_id."', 'loading', ".json_encode([$model->getExternalId(), $connector->label, '【分类列表】'.$label, '获得列表']).");";
       $handle .= "modal_layout();";
       $handle .= "listings('".$model->_id."', 1);";
     } else {
-      $column = $this->getSyncBuilder('detail')->elements('name');
-      $languages = app('auth')->user()->team['languages'];
-      if ($languages && $model->name && is_array($model->name)) {
-        $label = '';
-        foreach ($languages as $language) {
-          if (isset($model->name[$language]) && $model->name[$language]) { $label = $model->name[$language]; break; }
-        }
-      } else {
-        $label = $model->name;
-      }
       $handle  = "table_head(".json_encode($cells).");";
       $handle .= "table_line('".$model->_id."', 'loading', ".json_encode([$model->getExternalId(), $connector->label, '【实体详情】'.$label, '获得详情']).");";
       $handle .= "modal_layout();";
@@ -219,9 +225,11 @@ trait ExternalSyncTrait {
       $handle .= $this->contSync();
       return $handle;
     }
-    $id = $model->getExternalId();
+    /*$id = $model->getExternalId();
     $entities = []; $next = false;
-    list($entities, $next) = $connector->listings(compact('id', 'page'));
+    list($entities, $next) = $connector->listings(compact('id', 'page'));*/
+    extract($connector->listings($model->getExternalUrl()), $page);
+    dd(1);
     $listings = session('sync.listings', []);
     if ($entities) {
       foreach ($entities as $entity) {

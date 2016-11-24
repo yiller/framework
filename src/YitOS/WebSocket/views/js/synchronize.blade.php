@@ -9,14 +9,12 @@ var ExternalSynchronize = function() {
       params._token = '{{ csrf_token() }}';
     }
     $.post(url, params, function(data) {
-      window.setTimeout(function() {
-        if (data.handle != undefined) {
-          eval(data.handle);
-          return;
-        }
-        enable_buttons();
-        if (handle_callback != null) handle_callback(data);
-      }, 1000);
+      if (data.handle != undefined) {
+        eval(data.handle);
+        return;
+      }
+      enable_buttons();
+      if (handle_callback != null) handle_callback(data);
     }).error(function() {
       enable_buttons();
       if (handle_error != null) handle_error();

@@ -29,4 +29,18 @@ interface ExternalSyncModel {
    */
   public function getExternalId();
   
+  /**
+   * 获得第三方远端来源地址
+   * @access public
+   * @return string
+   */
+  public function getExternalUrl();
+  
+  /**
+   * 获得标题字段的键名
+   * @access public
+   * @return string
+   */
+  public function getExternalDisplayName();
+  
 }
