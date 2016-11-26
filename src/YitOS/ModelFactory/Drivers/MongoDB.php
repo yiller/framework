@@ -13,12 +13,28 @@ use YitOS\ModelFactory\Drivers\Driver as SyncDriver;
 class MongoDB extends SyncDriver {
   
   /**
+   * 初始化工厂
+   * @access public
+   * @param string $name
+   * @param string $classname
+   * @param integer $duration
+   * @return \YitOS\ModelFactory\Drivers\Driver
+   */
+  public function __construct($name, $classname, $duration, $enabledSync = true) {
+    if (!class_exists($classname)) {
+      throw new InvalidArgumentException();
+    }
+    parent::__construct($name, $classname, $duration, $enabledSync);
+  }
+  
+  /**
    * 元素定义
    * @access protected
    * @return array
    */
   protected function getElements() {
     $response = WebSocket::sync_elements(['name' => $this->name()]);
+    dd($response);
     return $response && $response['code'] == 1 ? $response['elements'] : [];
   }
   

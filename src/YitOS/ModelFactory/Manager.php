@@ -68,7 +68,7 @@ class Manager extends BaseManager {
       $enabledSync = false;
     }
     
-    if (!$model_class || !class_exists($model_class)) {
+    if (!$model_class) {
       throw new InvalidArgumentException(trans('modelfactory::exception.mapping_not_found', compact('name')));
     }
     
