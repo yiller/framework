@@ -13,28 +13,12 @@ use YitOS\ModelFactory\Drivers\Driver as SyncDriver;
 class MongoDB extends SyncDriver {
   
   /**
-   * 初始化工厂
-   * @access public
-   * @param string $name
-   * @param string $classname
-   * @param integer $duration
-   * @return \YitOS\ModelFactory\Drivers\Driver
-   */
-  public function __construct($name, $classname, $duration, $enabledSync = true) {
-    if (!class_exists($classname)) {
-      throw new InvalidArgumentException();
-    }
-    parent::__construct($name, $classname, $duration, $enabledSync);
-  }
-  
-  /**
    * 元素定义
    * @access protected
    * @return array
    */
   protected function getElements() {
     $response = WebSocket::sync_elements(['name' => $this->name()]);
-    dd($response);
     return $response && $response['code'] == 1 ? $response['elements'] : [];
   }
   
@@ -44,9 +28,7 @@ class MongoDB extends SyncDriver {
    * @return \Illuminate\Database\Eloquent\Builder
    */
   public function builder() {
-    $model_class = $this->classname;
-    $instance = new $model_class;
-    return $instance->newQuery();
+    return $this->instance()->newQuery();
   }
   
   /**
@@ -54,7 +36,7 @@ class MongoDB extends SyncDriver {
    * @access protected
    * @return \Jenssegers\Mongodb\Collection
    */
-  public function sync_config_table() {
+  public function _sync() {
     return app('db')->collection('_sync');
   }
   
@@ -69,7 +51,30 @@ class MongoDB extends SyncDriver {
       $params['timestamp'] = $timestamp;
     }
     $response = WebSocket::sync_download($params);
-    dd($response);
+    return ($response && $response['code'] == 1) ? $response['data'] : [];
+  }
+  
+  /**
+   * 数据同步（下行）之后
+   * @access protected
+   * @param \YitOS\ModelFactory\Model\MongoDB $model
+   * @return \YitOS\ModelFactory\Model\MongoDB|null
+   */
+  protected function downloaded($model) {
+    if (!$model) {
+      return null;
+    }
+    // 创建人信息
+    $user = app('auth')->getProvider()->retrieveByCredentials(['id' => $model->account_id]);
+    $model->account_id = $user ? $user->getAuthIdentifier() : '';
+    $model->user = $user ? ['username' => $user->account_username,'realname' => $user->realname, 'mobile' => $user->mobile, 'team' => ['name' => $user->team['name'], 'alias' => $user->team['alias']]] : [];
+    // 父子关系链
+    $parent = $this->builder()->where('id', $model->parent_id)->first();
+    $model->parent_id = $parent ? $parent->getKey() : '';
+    $model->parent = $parent ? array_only($parent->toArray(), ['label', 'link', 'alias']) : [];
+    $model->parents = $model->parents ? $this->builder()->whereIn('id', $model->parents)->pluck($model->getKeyName())->toArray() : [];
+    $model->children = $model->children ? $this->builder()->whereIn('id', $model->children)->pluck($model->getKeyName())->toArray() : [];
+    return $model->save() ? $model : null;
   }
   
 }

@@ -1,5 +1,7 @@
 <?php namespace YitOS\Authorization;
 
+use YitOS\Contracts\Authorization\Menu as MenuContract;
+
 /**
  * 页面菜单
  *
@@ -111,8 +113,8 @@ class Menus {
    */
   public static function load($class) {
     $instance = new static();
-    $menu = M($class)->model();
-    if ($menu instanceof \YitOS\Contracts\Authorization\Menu) {
+    $menu = M($class)->instance();
+    if ($menu instanceof MenuContract) {
       $instance->classname(get_class($menu))->menus($menu::getRootMenus());
     }
     return $instance;

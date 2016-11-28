@@ -1,19 +1,17 @@
-<?php namespace YitOS\Support\Traits;
+<?php namespace YitOS\Support\Traits\BootstrapUI;
 
 use RuntimeException;
 use Illuminate\Http\Request;
 
 /**
  * Ajax结构树分离类
- *
  * @author yiller <tech.yiller@yitos.cn>
- * @package YitOS\Support\Traits
+ * @package YitOS\Support\Traits\BootstrapUI
  */
 trait DataTreeTrait {
   
   /**
    * 加载配置
-   * 
    * @access protected
    * @return array
    * 
@@ -21,7 +19,7 @@ trait DataTreeTrait {
    */
   protected function configDT() {
     if (!property_exists($this, 'name') || !property_exists($this, 'route') || 
-        !method_exists($this, 'definedBuilder') || !method_exists($this, 'definedElements')) {
+        !method_exists($this, 'builder') || !method_exists($this, 'elements')) {
       throw new RuntimeException(trans('ui::exception.tree_not_supported'));
     }
     
@@ -30,12 +28,12 @@ trait DataTreeTrait {
     $config['data_url'] = property_exists($this, 'dataUrl') ? $this->dataUrl : action('\\'.get_class($this).'@listings');
     
     $config['columns'] = [];
-    foreach ($this->definedElements() as $element) {
+    foreach ($this->elements() as $element) {
       $config['columns'][$element['alias']] = [
         'name'  => $element['alias'],
         'label' => $element['name'],
         'bind'  => $element['alias'],
-        'multi_language' => (boolean)$element['multi_language']
+        'multi_language' => boolval($element['multi_language'])
       ];
     }
     $config['columns'] = method_exists($this, 'columnsConfigured') ? $this->columnsConfigured($config['columns']) : $config['columns'];
@@ -57,7 +55,6 @@ trait DataTreeTrait {
   
   /**
    * 渲染数据表格UI
-   * 
    * @access public
    * @return \Illuminate\Http\Response
    */
@@ -76,17 +73,16 @@ trait DataTreeTrait {
    * @param array $cookie
    * @return array
    */
-  protected function listingsRetrieve($builder, $parent_id, $cookie = []) {
+  protected function listingsRetrieve($method, $parent_id, $cookie = []) {
     $entities = [];
-    $clone = $builder;
-    $builder = $builder->where('parent_id', $parent_id);
+    $builder = $this->$method()->where('parent_id', $parent_id);
     $recordsFiltered = $recordsTotal = $builder->count();
     $listings = $builder->orderBy('sort_order', 'asc')->orderBy('updated_at', 'desc')->get();
     foreach ($listings as $entity) {
       if (in_array($entity->getKey(), $cookie)) {
         $entity->is_active = 1;
         $entities[] = $entity;
-        $vs = $this->listingsRetrieve($clone, $entity->getKey(), $cookie);
+        $vs = $this->listingsRetrieve($method, $entity->getKey(), $cookie);
         foreach ($vs as $v) { $entities[] = $v; }
       } else {
         $entity->is_active = 0;
@@ -98,7 +94,6 @@ trait DataTreeTrait {
   
   /**
    * 获得显示数据
-   * 
    * @access public
    * @param \Illuminate\Http\Request $request
    * @param \Illuminate\Database\Query\Builder $builder
@@ -112,14 +107,14 @@ trait DataTreeTrait {
       $cookie_value = [];
     }
     
-    $builder = method_exists($this, 'listingsRetrieving') ? $this->listingsRetrieving() : $this->definedBuilder();
-    $parent_id = $request->input('_id', '');
+    $method = method_exists($this, 'listingsRetrieving') ? 'listingsRetrieving' : 'builder';
+    $parent_id = $request->input('__', '');
     $action = $request->input('action', 'open');
     $listings = [];
 
     if ($action == 'open') { // 展开
       $listings['draw'] = $request->get('draw', 0);
-      $entities = $this->listingsRetrieve($builder, $parent_id, $cookie_value);
+      $entities = $this->listingsRetrieve($method, $parent_id, $cookie_value);
       $listings['recordsTotal'] = $listings['recordsFiltered'] = count($entities);
       
       $data = [];
@@ -148,21 +143,22 @@ trait DataTreeTrait {
         foreach ($config['columns'] as $column) {
           $name = $column['name'];
           $bind = $column['bind'];
-          $func = isset($column['handle']) ? $column['handle'] : function($value, $attrs) { return $value; };
-          $value = isset($attributes[$bind]) ? $func($attributes[$bind], $attributes) : $func('', $attributes);
+          $multi_language = isset($column['multi_language']) ? $column['multi_language'] : false;
+          $value = isset($attributes[$bind]) ? $attributes[$bind] : '';
           // 多语言支持
-          $languages = app('auth')->user()->team['languages'];
-          if ($languages && $value && is_array($value)) {
-            $v = '';
+          if ($multi_language && $value && ($languages = app('auth')->user()->team['languages'])) {
+            $temp = '';
             foreach ($languages as $language) {
-              if (isset($value[$language]) && $value[$language]) { $v = $value[$language]; break; }
+              if (isset($value[$language]) && $value[$language]) { $temp = $value[$language]; break; }
             }
-            $value = $v;
+            $value = $temp;
           }
+          $func = isset($column['handle']) ? $column['handle'] : function($value, $attrs) { return $value; };
+          $value = $func($value, $attributes);
           $value = array_key_exists('align', $column) ? ('<span style="display:block;text-align:'.$column['align'].';">'.$value.'</span>') : $value;
           if ($first_cell) {
             $value = '<span style="display:block;text-indent:'.($level*2).'em;">'.$value.'</span>';
-            $value .= '<input type="hidden" name="_id" value="'.$attributes['_id'].'">';
+            $value .= '<input type="hidden" name="__" value="'.$attributes['_id'].'">';
             $value .= '<input type="hidden" name="_parent" value="'.$attributes['parent_id'].'">';
             $first_cell = false;
           }
@@ -216,7 +212,7 @@ trait DataTreeTrait {
       $parent_id && !in_array($parent_id, $cookie_value) && $cookie_value[] = $parent_id;
     } else {
       // COOKIE更新，删除节点
-      $current = $builder->find($parent_id);
+      $current = $this->$method()->find($parent_id);
       $diff = $current ? $current->children : [];
       $diff[] = $parent_id;
       $cookie_value = array_diff($cookie_value, $diff);

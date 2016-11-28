@@ -1,13 +1,12 @@
-<?php namespace YitOS\Support\Traits;
+<?php namespace YitOS\Support\Traits\WebSocket\ExternalSync;
 
 /**
  * 支持第三方远程同步的数据模型分离类
- *
  * @author yiller <tech.yiller@yitos.cn>
- * @see \YitOS\Contracts\WebSocket\ExternalSyncModel
- * @package YitOS\Support\Traits
+ * @package YitOS\Support\Traits\WebSocket\ExternalSync
+ * @see \YitOS\Contracts\WebSocket\ExternalSync\Model
  */
-trait ExternalSyncModelTrait {
+trait ModelTrait {
   
   /**
    * 是否支持远端同步

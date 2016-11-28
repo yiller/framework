@@ -1,4 +1,4 @@
-<?php namespace YitOS\Support\Traits;
+<?php namespace YitOS\Support\Traits\WebSocket\ExternalSync;
 
 use Carbon\Carbon;
 use RuntimeException;
@@ -9,29 +9,19 @@ use YitOS\Contracts\WebSocket\ExternalSyncModel as SyncModelContract;
 
 /**
  * 数据第三方远程同步分离类
- *
  * @author yiller <tech.yiller@yitos.cn>
- * @package YitOS\Support\Traits
+ * @package YitOS\Support\Traits\WebSocket\ExternalSync
  */
-trait ExternalSyncTrait {
+trait ControllerTrait {
   
   /**
    * 获得扩展来源列表
    * @access protected
    * @param string $entity
-   * @param string $format
    * @return array
    */
-  protected function getExternalSourceOptions($entity, $format = '') {
-    $sources = app('db')->table('_external_sources')->where('entities', 'all', [$entity])->pluck('label', 'alias');
-    if ($format == 'single') {
-      return $sources;
-    }
-    $options = [];
-    foreach ($sources as $alias => $label) {
-      $options[] = ['label' => $label, 'value' => $alias];
-    }
-    return $options;
+  protected function getExternalSources($entity) {
+    return app('db')->table('_external_sources')->where('entities', 'all', [$entity])->pluck('label', 'alias');
   }
   
   /**

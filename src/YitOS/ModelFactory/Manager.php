@@ -5,8 +5,7 @@ use Illuminate\Support\Manager as BaseManager;
 use YitOS\ModelFactory\Drivers\Driver as DriverContract;
 
 /**
- * Mongodb模型工厂类
- *
+ * 模型工厂类
  * @author yiller <tech.yiller@yitos.cn>
  * @package YitOS\ModelFactory
  * @see \Illuminate\Support\Manager
@@ -14,7 +13,7 @@ use YitOS\ModelFactory\Drivers\Driver as DriverContract;
 class Manager extends BaseManager {
   
   protected $options = [
-    'Mongodb' => \YitOS\ModelFactory\Drivers\MongoDB::class,
+    'MongoDB' => [ \YitOS\ModelFactory\Drivers\MongoDB::class, \YitOS\ModelFactory\Model\MongoDB::class ]
   ];
   
   /**
@@ -24,7 +23,7 @@ class Manager extends BaseManager {
    * @return string
    */
   public function getDefaultDriver() {
-    return $this->app['config']['model.default'];
+    return '';
   }
   
   /**
@@ -38,47 +37,48 @@ class Manager extends BaseManager {
    */
   protected function createDriver($driver) {
     $name = $driver;
-    $driver = $this->getDefaultDriver();
-    if (!$driver || !is_string($driver)) {
-      throw new InvalidArgumentException(trans('modelfactory::exception.mapping_not_found', compact('name')));
+    $config = $this->app['config']['model'];
+    if (isset($config['default']) && is_string($config['default']) && isset($this->options[$config['default']])) {
+      list($driver_class, $base_class) = $this->options[$config['default']];
+    } elseif (isset($config['option']) && is_array($config['option']) && count($config['option']) == 2) {
+      list($driver_class, $base_class) = $config['option'];
+    } else {
+      $driver_class = $base_class = '';
     }
     
-    $classname = isset($this->options[$driver]) ? $this->options[$driver] : $driver;
-    if (!$classname || !class_exists($classname)) {
+    if (!$driver_class || !is_string($driver_class) || !class_exists($driver_class) || 
+        !$base_class   || !is_string($base_class)   || !class_exists($base_class)) {
       throw new InvalidArgumentException(trans('modelfactory::exception.mapping_not_found', compact('name')));
     }
-    
+
     $mapping = $this->app['config']['model.mapping'];
-    
     if (!isset($mapping[$name]) || !$mapping[$name]) {
       $duration = 0;
-      $model_class = $name;
+      $model_class = $base_class;
       $enabledSync = false;
     } elseif (is_string($mapping[$name])) {
       $duration = 0;
       $model_class = $mapping[$name];
-      $enabledSync = true;
+      $enabledSync = false;
     } elseif (is_array($mapping[$name])) {
       $model_class = $mapping[$name][0];
       $duration = count($mapping[$name]) > 1 ? intval($mapping[$name][1]) : 0;
       $enabledSync = count($mapping[$name]) > 2 ? boolval($mapping[$name][2]) : true;
     } else {
       $duration = 0;
-      $model_class = $name;
+      $model_class = $base_class;
       $enabledSync = false;
     }
     
-    if (!$model_class) {
-      throw new InvalidArgumentException(trans('modelfactory::exception.mapping_not_found', compact('name')));
-    }
-    
     try {
-      $instance = new $classname($name, $model_class, $duration, $enabledSync);
+      if (!$model_class || !class_exists($model_class) || !(new $model_class) instanceof $base_class) {
+        throw new InvalidArgumentException;
+      }
+      $instance = new $driver_class($name, $model_class, $duration, $enabledSync);
+      if (!$instance instanceof DriverContract) {
+        throw new InvalidArgumentException;
+      }
     } catch(InvalidArgumentException $e) {
-      throw new InvalidArgumentException(trans('modelfactory::exception.mapping_not_found', compact('name')));
-    }
-    
-    if (!$instance instanceof DriverContract) {
       throw new InvalidArgumentException(trans('modelfactory::exception.mapping_not_found', compact('name')));
     }
     

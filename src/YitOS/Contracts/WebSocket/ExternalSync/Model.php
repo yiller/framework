@@ -1,12 +1,11 @@
-<?php namespace YitOS\Contracts\WebSocket;
+<?php namespace YitOS\Contracts\WebSocket\ExternalSync;
 
 /**
  * 支持第三方远程同步的数据模型接口
- *
  * @author yiller <tech.yiller@yitos.cn>
- * @package YitOS\Contracts\WebSocket
+ * @package YitOS\Contracts\WebSocket\ExternalSync
  */
-interface ExternalSyncModel {
+interface Model {
   
   /**
    * 是否支持远端同步
@@ -35,12 +34,5 @@ interface ExternalSyncModel {
    * @return string
    */
   public function getExternalUrl();
-  
-  /**
-   * 获得标题字段的键名
-   * @access public
-   * @return string
-   */
-  public function getExternalDisplayName();
   
 }
