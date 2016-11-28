@@ -174,6 +174,7 @@ class Connector {
       curl_setopt($ch, CURLOPT_HEADER,         false);
       curl_setopt($ch, CURLOPT_TIMEOUT,        300);
       curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+      curl_setopt($ch, CURLOPT_USERAGENT,      'Mozilla/5.0 (Windows NT 10.0; WOW64; rv:50.0) Gecko/20100101 Firefox/50.0');
       if (property_exists($this, 'use_cookie') && $this->use_cookie) {
         $cookie = storage_path('app'.DIRECTORY_SEPARATOR.'connector'.DIRECTORY_SEPARATOR.parse_url($url)['host'].'.cookie.jar');
         curl_setopt($ch, CURLOPT_COOKIEJAR, $cookie);

@@ -2,6 +2,7 @@
 
 use Illuminate\Support\Str;
 use Illuminate\Support\Manager as BaseManager;
+use YitOS\WebSocket\ExternalSync\Spider as ExternalSyncConnectorContract;
 
 /**
  * WebSocket Factory类
@@ -32,7 +33,7 @@ class Manager extends BaseManager {
       return $this->callCustomCreator($driver);
     } elseif (method_exists($this, $method)) {
       return $this->$method();
-    } elseif (class_exists($driver) && ($instance = new $driver($this->app)) && ($instance instanceof \YitOS\WebSocket\SyncConnector)) {
+    } elseif (class_exists($driver) && ($instance = new $driver($this->app)) instanceof ExternalSyncConnectorContract) {
       return $instance;
     } else {
       return $this->makeDefaultConnector($driver);

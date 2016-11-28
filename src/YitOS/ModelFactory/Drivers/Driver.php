@@ -58,7 +58,7 @@ abstract class Driver {
    * @param bool $enabledSync
    * @return \YitOS\ModelFactory\Drivers\Driver
    * 
-   * @throw \InvalidArgumentException
+   * @throws \InvalidArgumentException
    */
   public function __construct($name, $classname, $duration, $enabledSync = true) {
     // 基本配置
@@ -67,7 +67,7 @@ abstract class Driver {
     $this->duration = intval($duration);
     $this->enabledSync = boolval($enabledSync);
     // 元素定义
-    if ($this->name == 'product_category') Cache::forget('elements_defined_'.$this->name);
+    //Cache::forget('elements_defined_'.$this->name);
     $elements = Cache::rememberForever('elements_defined_'.$this->name, function() {
       return $this->getElements();
     });
@@ -135,7 +135,6 @@ abstract class Driver {
   
   /**
    * 数据同步（下行）
-   * 
    * @access public
    * @return bool
    */

@@ -35,4 +35,11 @@ interface Model {
    */
   public function getExternalUrl();
   
+  /**
+   * 获得用于显示标题的字段名
+   * @access public
+   * @return string
+   */
+  public function getExternalUILabelKey();
+  
 }
