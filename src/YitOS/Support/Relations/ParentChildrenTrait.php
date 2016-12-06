@@ -2,7 +2,6 @@
 
 /**
  * 自身关联
- *
  * @author yiller <tech.yiller@yitos.cn>
  * @package YitOS\Support\Relations
  */

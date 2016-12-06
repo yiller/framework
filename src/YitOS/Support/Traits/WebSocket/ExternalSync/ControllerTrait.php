@@ -129,8 +129,42 @@ trait ControllerTrait {
       return response()->json(['status' => -1, 'message' => trans('websocket::exception.sync.api_not_supported', ['name' => $model->getExternalSource()])]);
     }
     
-    $step = $request->get('step', '');
-    if ($step == 'initial') { // 初始化，清空SESSION 并验证接口有效性
+    $now = Carbon::now()->format('U');
+    $step = $request->get('step', 'ui');
+    if ($step == 'ui') { // 加载远端同步JS
+      $handle = $this->uiSync($model, $handle);
+    } elseif ($step == 'initial') { // 初始化，清空SESSION并显示远端同步表格
+      $handle = $this->initialSync($connector, $model, $handle);
+    } elseif ($step == 'listings') {
+      if ($model->synchronized_at && $now - $model->synchronized_at < 1) {
+        $handle  = "line_status('".$model->_id."', 'warning', ".json_encode(['', '', '', '忽略，上次同步时间：'.Carbon::createFromTimestamp($model->synchronized_at)->format(Carbon::DEFAULT_TO_STRING_FORMAT)]).");";
+        $handle .= $this->contSync();
+      } else {
+        try {
+          extract($connector->listings($model));
+          if (!$model->getExternalId()) {
+            $model = $this->getSyncDriver('listings')->save(compact('__', 'external'));
+          }
+        } catch (\RuntimeException $e) {
+          $handle  = "line_status('".$model->_id."', 'danger', ".json_encode(['', '', '', $e->getMessage()]).");";
+          $handle .= $this->contSync();
+        }
+      }
+    } elseif ($step == 'detail') {
+      exit;
+    } else {
+      $method = $step ? lcfirst(studly_case($step)).'Sync' : '';
+      if (!$method || method_exists($connector, $method)) {
+        throw new \RuntimeException(trans('websocket::exception.sync.controller_not_supported'));
+      }
+      if (substr($handle,-4) == 'CONT') {
+        $handle = substr($handle,0,-4) . $this->contSync($model);
+      }
+      exit;
+    }
+    
+    
+    /*if ($step == 'initial') { // 初始化，清空SESSION 并验证接口有效性
       $handle = $this->initialSync($connector, $model, $handle);
     } elseif ($step == 'listings') { // 根据分类获得实体列表
       $page = intval($request->get('page', 1));
@@ -150,11 +184,7 @@ trait ControllerTrait {
       } else {
         throw new \RuntimeException(trans('websocket::exception.sync.controller_not_supported'));
       }
-      
-      if (substr($handle,-4) == 'CONT') {
-        $handle = substr($handle,0,-4) . $this->contSync($model);
-      }
-    }
+    }*/
     return response()->json(compact('handle'));
   }
   

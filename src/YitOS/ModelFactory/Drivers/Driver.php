@@ -134,6 +134,76 @@ abstract class Driver {
   }
   
   /**
+   * 储存数据
+   * @access public
+   * @param  array $data
+   * @return mixed
+   */
+  public function save($data) {
+    if (!isset($data['__']) || !($instance = $this->builder()->find($data['__']))) {
+      $instance = $this->instance();
+    }
+    unset($data['__'], $data['id']);
+    $instance->fill($data);
+    if ($this->enabledSync) {
+      return $this->syncUpload($instance) ?: null;
+    } else {
+      return $instance->save() ? $instance : null;
+    }
+  }
+  
+  /**
+   * 数据同步（上行）
+   * @access protected
+   * @param mixed $instance
+   * @return mixed
+   */
+  protected function syncUpload($instance) {
+    if (!$this->enabledSync) {
+      return $instance->save() ? $instance : null;
+    }
+    if (!method_exists($this, 'upload')) {
+      throw new InvalidArgumentException(trans('modelfactory::exception.method_not_exists', ['method' => 'upload']));
+    }
+    // 同步准备阶段
+    $now = Carbon::now();
+    $attributes = $instance->getAttributes();
+    $data = [];
+    foreach ($this->elements as $element) {
+      $data[$element['alias']] = isset($attributes[$element['alias']]) ? $attributes[$element['alias']] : '';
+    }
+    $data['id'] = isset($attributes['id']) ? intval($attributes['id']) : 0;
+    $data['parent_id'] = isset($attributes['parent_id']) && ($parent = $this->builder()->find($attributes['parent_id'])) ? intval($parent->id) : 0;
+    $data['sort_order'] = isset($attributes['sort_order']) ? intval($attributes['sort_order']) : 0;
+    method_exists($this->instance(), 'uploading') && $data = $this->instance()->uploading($data);
+    app('log')->info('数据同步（上行）开始', ['name' => $this->name]);
+    // 开始同步
+    $respond = $this->upload($data);
+    if (!$respond) {
+      app('log')->emergency('数据同步（上行）失败', ['name' => $this->name]);
+      return false;
+    }
+    extract($respond);
+    $model = $this->builder()->updateOrCreate(['id' => $data['id']], $data);
+    // 上行同步之后
+    $model && method_exists($this, 'synchronized') && $model = $this->synchronized($model);
+    $model && method_exists($model, 'synchronized') && $model = $model->synchronized();
+    if (!$model) {
+      app('log')->emergency('数据同步（上行）失败，基库编号：#'.$data['id'], ['name' => $this->name]);
+      return false;
+    }
+    $related = isset($related) ? $related : [];
+    foreach ($related as $alias => $recs) {
+      foreach ($recs as $k => $rec) {
+        $instance = M($alias)->where('id', $k)->first();
+        $instance && $instance->update($rec);
+      }
+    }
+    app('log')->info('数据同步（上行）成功，基库编号：# '.$model->id, ['name' => $this->name]);
+    return true;
+  }
+  
+  /**
    * 数据同步（下行）
    * @access public
    * @return bool
@@ -163,7 +233,7 @@ abstract class Driver {
     } else {
       $timestamp = $config['synchronized_at'];
     }
-    app('log')->info('数据同步（上行）开始', ['name' => $this->name]);
+    app('log')->info('数据同步（下行）开始', ['name' => $this->name]);
     // 开始同步
     $data = $this->download($timestamp);
     $models = [];
@@ -173,8 +243,8 @@ abstract class Driver {
     // 同步之后执行
     $objects = [];
     foreach ($models as $model) {
-      method_exists($this, 'downloaded') && $model = $this->downloaded($model);
-      method_exists($this->instance(), 'downloaded') && $model = $this->instance()->downloaded($model);
+      $model && method_exists($this, 'synchronized') && $model = $this->synchronized($model);
+      $model && method_exists($model, 'synchronized') && $model = $model->synchronized();
       $model && $objects[] = $model;
     }
     // 更新配置记录

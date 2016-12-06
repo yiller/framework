@@ -2,6 +2,7 @@
 
 use RuntimeException;
 use YitOS\WebSocket\Connector;
+use YitOS\Contracts\WebSocket\ExternalSync\Model as ExternalSyncModelContract;
 
 /**
  * 远程同步蜘蛛基类
@@ -58,41 +59,76 @@ abstract class Spider extends Connector {
   abstract protected function getExternalId($url, $type = 'detail');
   
   /**
-   * 获得存储引擎
+   * 根据html判断是否有更多列表页
+   * @abstract
    * @access protected
-   * @return \Illuminate\Contracts\Filesystem\Filesystem
+   * @param string $html
+   * @return bool
    */
-  protected function getStorage() {
-    return app('filesystem')->disk('local');
+  abstract protected function hasMore($html);
+  
+  /**
+   * 获得页面的html
+   * @access protected
+   * @param string $url
+   * @param string $type
+   * @param integer $page
+   * @return string
+   * 
+   * @throws RuntimeException
+   */
+  protected function html($url, $type, $page = 1) {
+    if (!in_array($type, ['listings', 'detail'])) {
+      throw new RuntimeException('非法调用');
+    }
+    $storage = app('filesystem')->disk('local');
+    $id = $this->getExternalId($url, $type);
+    if ($type == 'listings') {
+      $file = 'connector/'.trim($this->getStorageDirectory(), '/').'/listings/'.$id.'-'.$page.'.html';
+    } else {
+      $file = 'connector/'.trim($this->getStorageDirectory(), '/').'/detail/'.$id.'.html';
+    }
+    if (!$storage->exists($file)) {
+      $content = $this->catch(compact('url', 'id', 'type', 'page'));
+      $content && $storage->put($file, $content);
+    } else {
+      $content = $storage->get($file);
+    }
+    return $content;
   }
   
   /**
    * 获得实体列表和下一页相关信息
    * @access public
-   * @param string $url
-   * @param integer $page
+   * @param ExternalSyncModelContract $model
    * @return array
+   * 
+   * @throws RuntimeException
    */
-  public function listings($url, $page = 1) {
+  public function listings(ExternalSyncModelContract $model) {
+    $url = $model->getExternalUrl();
+    $page = intval(app('request')->get('page'));
+    $page < 1 && $page = 1;
+    
     // 计算分类页面的扩展编号
     $category_id = $this->getExternalId($url, 'listings');
     if (!$category_id) {
-      throw new \RuntimeException('列表页面分析失败（未能获得扩展编号）');
+      throw new RuntimeException('列表页面分析失败（未能获得扩展编号）');
     }
-    $category = ['external' => ['enabled' => 1, 'source' => $this->alias, 'url' => $url, 'id' => $category_id]];
+    $external = ['enabled' => 1, 'source' => $this->alias, 'url' => $url, 'id' => $category_id];
     // 抓取并保存页面
-    $file = 'connector/'.trim($this->getStorageDirectory(), '/').'/'.$category_id.'-'.$page.'.html';
-    if (!$this->getStorage()->exists($file)) {
-      $content = $this->catch(['url' => $url, 'id' => $category_id, 'type' => 'listings', 'page' => $page]);
-      $content && $this->getStorage()->put($file, $content);
-    } else {
-      $content = $this->getStorage()->get($file);
-    }
+    $html = $this->html($url, 'listings', $page);
     // 根据列表页面解析元素
     $entities = [];
     // 是否还有更多分页
-    $more = false;
-    return compact('category', 'entities', 'more');
+    if ($this->hasMore($html)) {
+      $next = $page + 1;
+      $handle  = "line_status('".$model->_id."', 'loading', ".json_encode([$category_id, '', '', '第 '.$page.' 页抓取成功，正在抓取第'.$next.'页']).");";
+      $handle .= "listings('".$model->_id."',".($page+1).");";
+    } else {
+      throw new RuntimeException('列表完成');
+    }
+    return compact('external', 'entities', 'handle');
   }
   
   /**

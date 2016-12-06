@@ -2,6 +2,7 @@
 
 use YitOS\Support\Facades\WebSocket;
 use YitOS\ModelFactory\Drivers\Driver as SyncDriver;
+use YitOS\ModelFactory\Model\MongoDB as ModelContract;
 
 /**
  * MongoDB数据库模型工厂类
@@ -41,9 +42,21 @@ class MongoDB extends SyncDriver {
   }
   
   /**
+   * 数据同步（上行）
+   * @access protected
+   * @param array $data
+   * @return array
+   */
+  protected function upload($data) {
+    $params = ['name' => $this->name(), 'data' => $data];
+    $response = WebSocket::sync_upload($params);
+    return ($response && $response['code'] == 1) ? array_only($response, ['data','related']) : [];
+  }
+  
+  /**
    * 数据同步（下行）
    * @access public
-   * @return bool
+   * @return array
    */
   protected function download($timestamp) {
     $params = ['name' => $this->name()];
@@ -55,25 +68,22 @@ class MongoDB extends SyncDriver {
   }
   
   /**
-   * 数据同步（下行）之后
+   * 数据同步之后
    * @access protected
-   * @param \YitOS\ModelFactory\Model\MongoDB $model
-   * @return \YitOS\ModelFactory\Model\MongoDB|null
+   * @param ModelContract $model
+   * @return ModelContract|null
    */
-  protected function downloaded($model) {
-    if (!$model) {
-      return null;
-    }
+  protected function synchronized(ModelContract $model) {
     // 创建人信息
     $user = app('auth')->getProvider()->retrieveByCredentials(['id' => $model->account_id]);
     $model->account_id = $user ? $user->getAuthIdentifier() : '';
-    $model->user = $user ? ['username' => $user->account_username,'realname' => $user->realname, 'mobile' => $user->mobile, 'team' => ['name' => $user->team['name'], 'alias' => $user->team['alias']]] : [];
+    $model->account = $user ? ['username' => $user->account_username,'realname' => $user->realname, 'mobile' => $user->mobile, 'team' => ['name' => $user->team['name'], 'alias' => $user->team['alias']]] : [];
     // 父子关系链
     $parent = $this->builder()->where('id', $model->parent_id)->first();
     $model->parent_id = $parent ? $parent->getKey() : '';
     $model->parent = $parent ? array_only($parent->toArray(), ['label', 'link', 'alias']) : [];
-    $model->parents = $model->parents ? $this->builder()->whereIn('id', $model->parents)->pluck($model->getKeyName())->toArray() : [];
-    $model->children = $model->children ? $this->builder()->whereIn('id', $model->children)->pluck($model->getKeyName())->toArray() : [];
+    // 清除缓存
+    $model->IDXClear();
     return $model->save() ? $model : null;
   }
   
