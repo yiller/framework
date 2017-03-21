@@ -14,13 +14,34 @@ use YitOS\ModelFactory\Model\MongoDB as ModelContract;
 class MongoDB extends SyncDriver {
   
   /**
-   * 元素定义
+   * 获得同步配置表
+   * @static
+   * @access public
+   * @return \Jenssegers\Mongodb\Collection
+   */
+  public static function metaTable() {
+    return app('db')->collection('_meta');
+  }
+  
+  /**
+   * 初始化元素定义
+   * @abstract
    * @access protected
    * @return array
    */
-  protected function getElements() {
-    $response = WebSocket::sync_elements(['name' => $this->name()]);
-    return $response && $response['code'] == 1 ? $response['elements'] : [];
+  protected function getMetaBySocket() {
+    $response = WebSocket::{'sync/elements'}(['name' => $this->name()]);
+    $meta = ['entity' => [], 'elements' => []];
+    if (!$response || $response['code'] != 1) {
+      return $meta;
+    }
+    $meta['entity'] = $response['entity'];
+    $meta['elements'] = $response['elements'];
+    foreach ($meta['elements'] as $key => $item) {
+      $item['multi_language'] = boolval($item['multi_language']);
+      $meta['elements'][$key] = $item;
+    }
+    return $meta;
   }
   
   /**
@@ -30,15 +51,6 @@ class MongoDB extends SyncDriver {
    */
   public function builder() {
     return $this->instance()->newQuery();
-  }
-  
-  /**
-   * 获得同步配置表
-   * @access protected
-   * @return \Jenssegers\Mongodb\Collection
-   */
-  public function _sync() {
-    return app('db')->collection('_sync');
   }
   
   /**
@@ -59,11 +71,11 @@ class MongoDB extends SyncDriver {
    * @return array
    */
   protected function download($timestamp) {
-    $params = ['name' => $this->name()];
+    $params = ['name' => $this->name];
     if ($timestamp > 0) {
       $params['timestamp'] = $timestamp;
     }
-    $response = WebSocket::sync_download($params);
+    $response = WebSocket::{'sync/download'}($params);
     return ($response && $response['code'] == 1) ? $response['data'] : [];
   }
   

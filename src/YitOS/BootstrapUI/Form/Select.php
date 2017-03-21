@@ -7,24 +7,7 @@
  * @package YitOS\BootstrapUI\Form
  * @see \YitOS\BootstrapUI\Form\Element
  */
-class Select extends Element {
-  
-  /**
-   * 备选项目列表
-   * @var array 
-   */
-  protected $options = [];
-  
-  /**
-   * 设置备选项
-   * @access public
-   * @param array $options
-   * @return \YitOS\Foundation\BootstrapUI\Form\Select
-   */
-  public function options($options) {
-    $this->options = $options;
-    return $this;
-  }
+class Select extends Boolean {
   
   /**
    * 渲染元素HTML
@@ -38,7 +21,8 @@ class Select extends Element {
   public function render($data, $default = '') {
     $value = array_key_exists($this->name, $data) ? $data[$this->name] : $default;
     $html = '<select name="'.$this->name.'" '
-            . 'class="bs-select form-control '.$this->getStyle().'" '
+            //. 'class="bs-select form-control '.$this->getStyle().'" '
+            . 'class="select2me form-control '.$this->getStyle().'" '
             . 'style="'.$this->getCss().'" '
             . 'data-show-subtext="true" '
             . $this->getExtraAttributes()

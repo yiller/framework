@@ -34,13 +34,12 @@ var ExternalSynchronize = function() {
     cancel.prop('disabled', true);
   };
   // 构建表格头部
-  var table_head = function(cells) {
+  var table_head = function() {
     var $thead = $('thead tr:first', $_table);
     $thead.find('th:eq(0)').siblings().remove();
-    for (var i in cells) {
-      var cell = cells[i];
-      $('<th></th>').attr('width', cell.width).html(cell.text).appendTo($thead);
-    }
+    @foreach($cells as $cell)
+    $('<th></th>').attr('width', '{{ $cell['width'] }}').html('{{ $cell['text'] }}').appendTo($thead);
+    @endforeach
   };
   // 增加行
   var table_line = function(id, status, cells) {
@@ -109,10 +108,6 @@ var ExternalSynchronize = function() {
   };
   // 初始化调用
   var initial = function() {
-    var params = {'step': 'initial'};
-    params.handle = '{{ $handle }}';
-    params.__ = '{{ $model->_id }}';
-    
     if ($('#ajax-modal .modal-body table').size() == 0) {
       $('#ajax-modal .modal-body').append('<table class="table table-striped table-bordered table-hover"><thead><tr role="row" class="heading"><th width="3%"></th></tr></thead><tbody></tbody></table>');
     }
@@ -120,6 +115,20 @@ var ExternalSynchronize = function() {
     $('tbody', $_table).empty();
     
     disable_buttons();
+    table_head();
+    
+    var handle = '{{ $handle }}';
+    var id = '{{ $model->_id }}';
+    ui(handle, id);
+  };
+  // 创建表格行
+  var ui = function(handle) {
+    var params = {};
+    params.step = 'ui';
+    params.handle = handle;
+    if (arguments.length > 1) {
+      params.__ = arguments[1];
+    }
     RPC(params, function(data) {
       var message = '远程数据同步失败，请稍后重试！';
       if (data.status != 1 && data.message != undefined) {

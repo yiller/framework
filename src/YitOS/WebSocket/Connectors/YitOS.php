@@ -69,8 +69,11 @@ class YitOS extends Connector {
       return $url;
     }
     $url .= $name.'.json?_timestamp='.Carbon::now()->format('U');
-    if ($name != 'connect' && $this->app['request']->session()->has('client_token')) {
-      ($token = $this->app['request']->session()->get('client_token')) && ($url .= '&_token='.explode(':', $token)[0]);
+    if ($name != 'connect') {
+      if ($this->app['filesystem']->disk('local')->exists('connector/yitos/.token')) {
+        ($token = $this->app['filesystem']->disk('local')->get('connector/yitos/.token')) && 
+        ($url .= '&_token='.explode(':', $token)[0]);
+      }
     }
     return $url;
   }
@@ -87,8 +90,9 @@ class YitOS extends Connector {
     if ($name != 'connect') {
       $this->original_name = $name;
       $this->original_parameters = $parameters;
-      if ($this->app['request']->session()->has('client_token')) {
-        ($token = $this->app['request']->session()->get('client_token')) && ($parameters['_token'] = explode(':', $token)[0]);
+      if ($this->app['filesystem']->disk('local')->exists('connector/yitos/.token')) {
+        ($token = $this->app['filesystem']->disk('local')->get('connector/yitos/.token')) && 
+        ($parameters['_token'] = explode(':', $token)[0]);
       }
     }
     if ($parameters) {
@@ -117,10 +121,10 @@ class YitOS extends Connector {
         return $this->token() ? ($parameters ? $this->{$name}($parameters) : $this->{$name}()) : [];
       } elseif (isset($response['expires'])) {
         $expires = $response['expires'];
-        $token = explode(':', $this->app['request']->session()->get('client_token', ''));
+        $token = explode(':', $this->app['filesystem']->disk('local')->get('connector/yitos/.token'));
         if (count($token) == 3) {
           $token[2] = $expires;
-          $this->app['request']->session()->put('client_token', implode(':', $token));
+          $this->app['filesystem']->disk('local')->put('connector/yitos/.token', implode(':', $token));
         }
         unset($response['expires']);
       }
@@ -135,7 +139,11 @@ class YitOS extends Connector {
    * @return \YitOS\OpenSSL\DESCryptor
    */
   protected function cryptor() {
-    $secret_key = ($token = $this->app['request']->session()->get('client_token')) ? explode(':', $token)[1] : '';
+    $secret_key = '';
+    if ($this->app['filesystem']->disk('local')->exists('connector/yitos/.token')) {
+      ($token = $this->app['filesystem']->disk('local')->get('connector/yitos/.token')) && 
+      ($secret_key = explode(':', $token)[1]);
+    }
     $cryptor = new DESCryptor($secret_key);
     return $cryptor;
   }
@@ -146,12 +154,10 @@ class YitOS extends Connector {
    * @return bool
    */
   protected function token() {
-    $ip = $this->app['request']->ip();
-    $response = $this->connect(compact('ip'));
+    $response = $this->connect();
     if ($response && $response['code'] == 1) {
       $token = implode(':', explode('|', $response['data']));
-      $this->app['request']->session()->put('client_token', $token);
-      return true;
+      return $this->app['filesystem']->disk('local')->put('connector/yitos/.token', $token);
     }
     return false;
   }
@@ -163,11 +169,11 @@ class YitOS extends Connector {
    */
   public function tokenExists() {
     // 令牌存在
-    if (!$this->app['request']->session()->has('client_token')) {
+    if (!$this->app['filesystem']->disk('local')->exists('connector/yitos/.token')) {
       return $this->token();
     }
     // 格式正确
-    $token = $this->app['request']->session()->get('client_token', '');
+    $token = $this->app['filesystem']->disk('local')->get('connector/yitos/.token');
     if (!$token || substr_count($token, ':') != 2) {
       return $this->release()->token();
     }
@@ -185,7 +191,7 @@ class YitOS extends Connector {
    * @return void
    */
   public function release() {
-    $this->app['request']->session()->forget('client_token');
+    $this->app['filesystem']->disk('local')->delete('connector/yitos/.token');
     return $this;
   }
   

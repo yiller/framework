@@ -78,17 +78,17 @@ trait ControllerTrait {
    */
   public function getSync(Request $request) {
     if (!method_exists($this, 'syncRenderring') || !method_exists($this, 'getSyncDriver')) {
-      throw new \RuntimeException(trans('websocket::exception.sync.controller_not_supported'));
+      throw new RuntimeException(trans('websocket::exception.sync.controller_not_supported'));
     }
     
     $data = $this->syncRenderring($request);
     $model = isset($data['model']) ? $data['model'] : null;
     if (!$model || !$model instanceof ExternalSyncModelContract || !$model->isExternal()) {
-      throw new \RuntimeException(trans('websocket::exception.sync.model_not_supported'));
+      throw new RuntimeException(trans('websocket::exception.sync.model_not_supported'));
     }
     $template = isset($data['template']) ? $data['template'] : '';
     if (!$template || !View::exists($template)) {
-      throw new \RuntimeException(trans('websocket::exception.sync.template_not_found'));
+      throw new RuntimeException(trans('websocket::exception.sync.template_not_found'));
     }
     
     $data['url'] = action('\\'.get_class($this).'@getSync');
@@ -111,18 +111,26 @@ trait ControllerTrait {
     if ($handle != 'listings') {
       $handle = 'detail';
     }
+    if (!method_exists($this, 'getSyncDriver')) {
+      throw new RuntimeException(trans('websocket::exception.sync.controller_not_supported'));
+    }
+    
     $__ = $request->get('__', '');
     if (!$__ && $handle == 'detail') {
-      $listings = session('sync.listings', []);
-      $listings && $__ = array_shift($listings);
-      session(['sync.listings' => $listings]);
+      $entity = session('sync.entity', []);
+      if (!$entity || !isset($entity['external']['source']) || !isset($entity['external']['id'])) {
+        throw new RuntimeException(trans('websocket::exception.sync.entity_parameter_is_missing'));
+      }
+      $model = $this->getSyncDriver()->builder()->where(['external.enabled' => 1, 'external.source' => $entity['external']['source'], 'external.id' => $entity['external']['id']])->first();
+      $model = $model ?: $this->getSyncDriver()->instance();
+      unset($entity['__']);
+      $model->fill($entity);
+    } else {
+      $model = $this->getSyncDriver($handle)->builder()->find($__);
     }
-    if (!method_exists($this, 'getSyncDriver')) {
-      throw new \RuntimeException(trans('websocket::exception.sync.controller_not_supported'));
-    }
-    $model = $this->getSyncDriver($handle)->builder()->find($__);
+    
     if (!$model || !$model instanceof ExternalSyncModelContract || !$model->isExternal()) {
-      throw new \RuntimeException(trans('websocket::exception.sync.model_not_supported'));
+      throw new RuntimeException(trans('websocket::exception.sync.model_not_supported'));
     }
     $connector = $this->getSyncConnector($model->getExternalSource());
     if (!$connector) {
@@ -130,101 +138,103 @@ trait ControllerTrait {
     }
     
     $now = Carbon::now()->format('U');
-    $step = $request->get('step', 'ui');
-    if ($step == 'ui') { // 加载远端同步JS
-      $handle = $this->uiSync($model, $handle);
-    } elseif ($step == 'initial') { // 初始化，清空SESSION并显示远端同步表格
-      $handle = $this->initialSync($connector, $model, $handle);
+    $step = $request->get('step', 'initial');
+    if ($step == 'initial') { // 初始化，加载远端同步JS，清空SESSION并显示远端同步表格
+      $handle = $this->initialSync($model, $handle);
+    } elseif ($step == 'ui') { // 显示表格行
+      $handle = $this->uiSync($connector, $model, $handle);
     } elseif ($step == 'listings') {
-      if ($model->synchronized_at && $now - $model->synchronized_at < 1) {
-        $handle  = "line_status('".$model->_id."', 'warning', ".json_encode(['', '', '', '忽略，上次同步时间：'.Carbon::createFromTimestamp($model->synchronized_at)->format(Carbon::DEFAULT_TO_STRING_FORMAT)]).");";
-        $handle .= $this->contSync();
+      if ($model->synchronized_at && $now - $model->synchronized_at < 600) {
+        $handle  = "line_status('".$model->_id."', 'warning', ".json_encode(['', '', '', '忽略，上次同步时间：'.Carbon::createFromTimestamp($model->synchronized_at)->format(Carbon::DEFAULT_TO_STRING_FORMAT)]).");CONT";
       } else {
-        try {
-          extract($connector->listings($model));
-          if (!$model->getExternalId()) {
-            $model = $this->getSyncDriver('listings')->save(compact('__', 'external'));
-          }
-        } catch (\RuntimeException $e) {
-          $handle  = "line_status('".$model->_id."', 'danger', ".json_encode(['', '', '', $e->getMessage()]).");";
-          $handle .= $this->contSync();
-        }
+        $handle = $this->listingsSync($connector, $model, $handle);
       }
     } elseif ($step == 'detail') {
-      exit;
+      $handle = $this->detailSync($connector, $model);
     } else {
       $method = $step ? lcfirst(studly_case($step)).'Sync' : '';
-      if (!$method || method_exists($connector, $method)) {
-        throw new \RuntimeException(trans('websocket::exception.sync.controller_not_supported'));
+      if (!$method || !method_exists($connector, $method)) {
+        throw new RuntimeException(trans('websocket::exception.sync.controller_not_supported'));
       }
-      if (substr($handle,-4) == 'CONT') {
-        $handle = substr($handle,0,-4) . $this->contSync($model);
-      }
-      exit;
-    }
-    
-    
-    /*if ($step == 'initial') { // 初始化，清空SESSION 并验证接口有效性
-      $handle = $this->initialSync($connector, $model, $handle);
-    } elseif ($step == 'listings') { // 根据分类获得实体列表
-      $page = intval($request->get('page', 1));
-      $handle = $this->listingsSync($connector, $model, $page);
-    } elseif ($step == 'detail') { // 准备开始详情同步
-      $handle = $this->detailSync($connector, $model);
-    } elseif ($step == 'info') { // 基本信息
-      $handle = $this->infoSync($connector, $model);
-    } else {
-      $method = $step ? lcfirst(studly_case($step)).'Sync' : 'uiSync';
-      if ($method == 'uiSync') {
-        $handle = $this->uiSync($model, $handle);
-      } elseif (method_exists($connector, $method)) {
+      $switch = $handle;
+      try {
         extract($connector->$method($model));
-        $instance = $this->getSyncBuilder()->save($model->getAttributes());
-        $instance || $handle = "line_status('".$model->_id."', 'danger', ".json_encode(['', '', '', '额外操作失败']).");CONT";
-      } else {
-        throw new \RuntimeException(trans('websocket::exception.sync.controller_not_supported'));
+        if ($switch == 'listings') {
+          $sync_entities = session('sync.entities', []);
+          $sync_listings = session('sync.listings', []);
+          if (isset($entities)) {
+            foreach ($entities as $entity) {
+              $entity['category_id'] = $model->_id;
+              $sync_entities[$entity['external']['source'].'.'.$entity['external']['id']] = $entity;
+            }
+          }
+          if (isset($listings)) {
+            foreach ($listings as $child) {
+              in_array($child, $sync_listings) || $sync_listings[] = $child;
+            }
+          }
+          session(['sync.entities' => $sync_entities, 'sync.listings' => $sync_listings]);
+        } else {
+          if (isset($entity)) {
+            isset($entity['_id']) && $entity['__'] = (string)$entity['_id'];
+            unset($entity['_id'], $entity['created_at'], $entity['updated_at']);
+            session(['sync.entity' => $entity]);
+          }
+        }
+      } catch (RuntimeException $e) {
+        $handle  = "line_status('', 'danger', ".json_encode(['', '', '', $e->getMessage()]).");CONT";
       }
-    }*/
+    }
+    if (substr($handle,-4) == 'CONT') {
+      $handle = substr($handle,0,-4) . $this->contSync();
+    }
     return response()->json(compact('handle'));
   }
   
   /**
-   * 显示同步界面
+   * 同步初始化
    * @access protected
    * @param ExternalSyncModelContract $model
    * @param string $handle
    * @return string
    */
-  protected function uiSync(ExternalSyncModelContract $model, $handle) {
+  protected function initialSync(ExternalSyncModelContract $model, $handle) {
+    $listing = $handle == 'listings' ? $model->_id : '';
+    session(['sync.listing' => $listing, 'sync.listings' => [], 'sync.listing_current' => 0, 'sync.entities' => [], 'sync.entity_current' => 0, 'sync.entity' => []]);
     $url = action('\\'.get_class($this).'@postSync');
-    return view('websocket::js.synchronize', compact('url', 'handle', 'model'))->render();
+    $cells = [
+      ['width' => '10%', 'text' => '实体标识'],
+      ['width' => '15%', 'text' => '实体来源'],
+      ['width' => '', 'text' => '同步实体'],
+      ['width' => '25%', 'text' => '同步结果'],
+    ];
+    return view('websocket::js.synchronize', compact('url', 'handle', 'model', 'cells'))->render();
   }
   
   /**
-   * 同步初始化
+   * 显示同步界面
    * @access protected
    * @param ExternalSyncConnectorContract $connector
    * @param ExternalSyncModelContract $model
    * @param string $handle
    * @return string
    */
-  protected function initialSync(ExternalSyncConnectorContract $connector, ExternalSyncModelContract $model, $handle) {
-    session(['sync.listings' => [],'sync.size' => 0, 'sync.entity' => '']);
-    $cells = [
-      ['width' => '10%', 'text' => '实体标识'],
-      ['width' => '20%', 'text' => '实体来源'],
-      ['width' => '', 'text' => '同步实体'],
-      ['width' => '25%', 'text' => '同步结果'],
-    ];
+  protected function uiSync(ExternalSyncConnectorContract $connector, ExternalSyncModelContract $model, $handle) {
     $label = $this->getSyncUILabel($model, $handle);
     if ($handle == 'listings') {
-      $handle  = "table_head(".json_encode($cells).");";
-      $handle .= "table_line('".$model->_id."', 'loading', ".json_encode([$model->getExternalId(), $connector->label, '【分类列表】'.$label, '获得列表']).");";
+      $handle  = "table_line('".$model->_id."', 'loading', ".json_encode([$model->getExternalId(), $connector->label, '【实体列表】'.$label, '正在抓取页面并分析列表...']).");";
       $handle .= "modal_layout();";
       $handle .= "listings('".$model->_id."', 1);";
     } else {
-      $handle  = "table_head(".json_encode($cells).");";
-      $handle .= "table_line('".$model->_id."', 'loading', ".json_encode([$model->getExternalId(), $connector->label, '【实体详情】'.$label, '获得详情']).");";
+      $listings = session('sync.entities', []);
+      $current = intval(session('sync.entity_current', 0)) + 1;
+      $no = '';
+      if ($listings) {
+        $size = count($listings);
+        $length = strlen((string)$size);
+        $no = str_pad((string)$current, $length, '0', STR_PAD_LEFT) . '/' . $size;
+      }
+      $handle  = "table_line('".$model->_id."', 'loading', ".json_encode([$model->getExternalId(), $connector->label, '【实体详情】('.$no.') '.$label, '正在抓取页面并分析实体...']).");";
       $handle .= "modal_layout();";
       $handle .= "detail('".$model->_id."', 'detail');";
     }
@@ -236,52 +246,36 @@ trait ControllerTrait {
    * @access protected
    * @param ExternalSyncConnectorContract $connector
    * @param ExternalSyncModelContract $model
-   * @param integer $page
+   * @param string $handle
    * @return string
    */
-  protected function listingsSync(ExternalSyncConnectorContract $connector, ExternalSyncModelContract $model, $page) {
-    $now = Carbon::now()->format('U');
-    if ($model->synchronized_at && $now - $model->synchronized_at < 1) {
-      $handle  = "line_status('".$model->_id."', 'warning', ".json_encode(['', '', '', '忽略，上次同步时间：'.Carbon::createFromTimestamp($model->synchronized_at)->format(Carbon::DEFAULT_TO_STRING_FORMAT)]).");";
-      $handle .= $this->contSync();
-      return $handle;
-    }
-    /*$id = $model->getExternalId();
-    $entities = []; $next = false;
-    list($entities, $next) = $connector->listings(compact('id', 'page'));*/
+  protected function listingsSync(ExternalSyncConnectorContract $connector, ExternalSyncModelContract $model, $handle) {
     try {
-      extract($connector->listings($model->getExternalUrl()), $page);
-    } catch (\RuntimeException $e) {
-      $handle  = "line_status('".$model->_id."', 'danger', ".json_encode(['', '', '', $e->getMessage()]).");";
-      $handle .= $this->contSync();
-      return $handle;
-    }
-    
-    
-    $listings = session('sync.listings', []);
-    if ($entities) {
+      $__ = $model->_id;
+      extract($connector->listings($model));
+      // 更新分类的扩展来源信息
+      if (!$model->getExternalId()) {
+        $model = $this->getSyncDriver('listings')->save(compact('__', 'external'));
+      }
+      // 实体暂存
+      if (!isset($entities) || !$entities) {
+        throw new RuntimeException('列表页面分析失败（未能正确解析实体信息）');
+      }
+      $sync_entities = session('sync.entities', []);
       foreach ($entities as $entity) {
         $entity['category_id'] = $model->_id;
-        $instance = $this->getSyncBuilder()->save($entity);
-        if (!$instance) {
-          continue;
-        }
-        !in_array($instance->_id, $listings) && $listings[] = $instance->_id;
+        $sync_entities[$entity['external']['source'].'.'.$entity['external']['id']] = $entity;
       }
-    } else {
-      $next = false;
-    }
-    session(['sync.listings' => $listings]);
-    if ($next) {
-      $handle  = "line_status('".$model->_id."', 'loading', ".json_encode(['', '', '', '分类列表第 '.$page.' 页抓取成功']).");";
-      $handle .= "listings('".$model->_id."',".($page+1).");";
-    } else {
-      session([
-        'sync.size' => count($listings),
-        'sync.entity' => $model->_id,
-      ]);
-      $handle  = "line_status('".$model->_id."', 'success', ".json_encode(['', '', '', '分类列表抓取成功（实体总计：'.count($listings).'）']).");";
-      $handle .= $this->contSync();
+      // 子级列表
+      $sync_listings = session('sync.listings', []);
+      if (isset($listings)) {
+        foreach ($listings as $child) {
+          in_array($child, $sync_listings) || $sync_listings[] = $child;
+        }
+      }
+      session(['sync.entities' => $sync_entities, 'sync.listings' => $sync_listings]);
+    } catch (RuntimeException $e) {
+      $handle  = "line_status('".$model->_id."', 'danger', ".json_encode(['', '', '', $e->getMessage()]).");CONT";
     }
     return $handle;
   }
@@ -289,78 +283,85 @@ trait ControllerTrait {
   /**
    * 远程同步详情（开始）
    * @access protected
-   * @param \YitOS\WebSocket\SyncConnector $connector
-   * @param \YitOS\Contracts\WebSocket\ExternalSyncModel $model
+   * @param ExternalSyncConnectorContract $connector
+   * @param ExternalSyncModelContract $model
    * @return string
    */
-  protected function detailSync(\YitOS\WebSocket\SyncConnector $connector, \YitOS\Contracts\WebSocket\ExternalSyncModel $model) {
-    $column = $this->getSyncBuilder('detail')->elements('name');
-    $languages = app('auth')->user()->team['languages'];
-    if ($languages && $model->name && is_array($model->name)) {
-      $label = '';
-      foreach ($languages as $language) {
-        if (isset($model->name[$language]) && $model->name[$language]) { $label = $model->name[$language]; break; }
+  protected function detailSync(ExternalSyncConnectorContract $connector, ExternalSyncModelContract $model) {
+    try {
+      extract($connector->detail($model));
+      if (!isset($entity) || !$entity) {
+        throw new RuntimeException('实体页面分析失败（未能正确解析实体信息）');
       }
-    } else {
-      $label = $model->name;
+      isset($entity['_id']) && $entity['__'] = (string)$entity['_id'];
+      unset($entity['_id'], $entity['created_at'], $entity['updated_at']);
+      session(['sync.entity' => $entity]);
+    } catch (RuntimeException $e) {
+      $handle  = "line_status('', 'danger', ".json_encode(['', '', '', $e->getMessage()]).");CONT";
     }
-    $title = '【实体详情】'.$label;
-    $listings = session('sync.listings', []);
-    if (session('sync.entity', '')) {
-      $size = intval(session('sync.size', 0));
-      $no = str_pad($size - count($listings),strlen($size.''),'0',STR_PAD_LEFT).'/'.str_pad($size,strlen($size.''),'0',STR_PAD_LEFT);
-      $title .= '（'.$no.'）';
-    }
-    $handle  = "table_line('".$model->_id."', 'loading', ".json_encode([$model->getExternalId(), $connector->label, $title, '获得基本信息']).");";
-    $handle .= "modal_layout();";
-    $handle .= "detail('".$model->_id."', 'info')";
-    return $handle;
-  }
-  
-  /**
-   * 远程同步详情（信息）
-   * @access protected
-   * @param \YitOS\WebSocket\SyncConnector $connector
-   * @param \YitOS\Contracts\WebSocket\ExternalSyncModel $model
-   * @return string
-   */
-  protected function infoSync(\YitOS\WebSocket\SyncConnector $connector, \YitOS\Contracts\WebSocket\ExternalSyncModel $model) {
-    $now = Carbon::now()->format('U');
-    $info = $connector->detail(['id' => $model->getExternalId()]);
-    if (is_array($info) && $info) {
-      $success = $model->fill($info)->save();
-    } elseif (is_array($info)) {
-      $success = true;
-    } else {
-      $success = false;
-    }
-    
-    if ($success) {
-      if (method_exists($connector, 'custom')) {
-        $handle = $connector->custom($model);
-      } else {
-        $handle  = "line_status('".$model->_id."', 'success', ".json_encode(['', '', '', '保存基本信息成功']).");";
-        $handle .= $this->contSync($model);
-      }
-    } else {
-      $handle  = "line_status('".$model->_id."', 'danger', ".json_encode(['', '', '', '获取基本信息失败']).");";
-      $handle .= $this->contSync($model);
-    }
-    
     return $handle;
   }
   
   /**
    * 下一个实体或结束？
    * @access protected
-   * @param mixed $model
    * @return string
    */
-  protected function contSync($model = null) {
-    if ($model) {
+  protected function contSync() {
+    $listings = session('sync.listings', []);
+    $listing_current = intval(session('sync.listing_current', 0));
+    $listing = session('sync.listing', '');
+    $entities = session('sync.entities', []);
+    $entity_current = intval(session('sync.entity_current', 0));
+    $entity = session('sync.entity', []);
+    $now = Carbon::now()->format('U');
+    /*if ($entity) { // 更新实体的同步时间
+      $model = $this->getSyncDriver()->builder()->find($entity['__']);
       $model->synchronized_at = Carbon::now()->format('U');
       $model->save();
+    }*/
+    if ($listing) { // 列表同步
+      if ($listings && $listing_current < count($listings)) {
+        $listing = $listings[$listing_current++];
+        session(['sync.listing_current' => $listing_current]);
+        return "ui('listings', '".$listing."');";
+      }
+      if ($entity) { // 实体存在，则回写
+        $entities[$entity['external']['source'].'.'.$entity['external']['id']] = $entity;
+        $entity_current++;
+      }
+      if ($entity_current < count($entities)) { // 下一个实体
+        $entity = array_slice(array_values($entities), $entity_current, 1)[0];
+        session(['sync.entities' => $entities, 'sync.entity_current' => $entity_current, 'sync.entity' => $entity]);
+        return "ui('detail');";
+      }
+      if ($entities) {
+        // 列表同步完成，需要保存
+        // 先同步实体，并更新实体同步时间
+        $models = $this->getSyncDriver()->saveMany($entities);
+        foreach ($models as $model) {
+          $model->synchronized_at = $now;
+          $model->save();
+        }
+        // 再更新列表同步时间
+        $model = $this->getSyncDriver('listings')->builder()->find($listing);
+        $model->synchronized_at = $now;
+        $model->save();
+      }
+    } else { // 实体同步
+      
     }
+    /*if ($size && $listings) { // 列表同步，还有实体尚未同步
+      $entity = array_shift($listings);
+      session(['sync.listings' => $listings, 'sync.entity' => $entity]);
+      return "ui('detail');";
+    } elseif ($size) { // 列表同步完成
+      $model = $this->getSyncDriver('listings')->builder()->find($entity['category_id']);
+      $model->synchronized_at = Carbon::now()->format('U');
+      $model->save();
+    }*/
+    return 'enable_buttons();';
+    /*exit;
     $__ = trim(session('sync.entity', ''));
     if (!$__) { // 并非列表，结束同步
       return 'enable_buttons();';
@@ -374,7 +375,7 @@ trait ControllerTrait {
       $category->synchronized_at = Carbon::now()->format('U');
       $category->save();
       return "enable_buttons();";
-    }
+    }*/
   }
   
 }

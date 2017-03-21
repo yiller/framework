@@ -18,7 +18,6 @@ class Manager extends BaseManager {
   
   /**
    * 获得默认的模型类名
-   * 
    * @access public
    * @return string
    */
@@ -28,7 +27,6 @@ class Manager extends BaseManager {
   
   /**
    * 创建一个新的模型实例
-   * 
    * @access protected
    * @param string $driver
    * @return \YitOS\ModelFactory\Eloquent\Model
@@ -50,31 +48,27 @@ class Manager extends BaseManager {
         !$base_class   || !is_string($base_class)   || !class_exists($base_class)) {
       throw new InvalidArgumentException(trans('modelfactory::exception.mapping_not_found', compact('name')));
     }
-
-    $mapping = $this->app['config']['model.mapping'];
-    if (!isset($mapping[$name]) || !$mapping[$name]) {
-      $duration = 0;
+    
+    $model_class = '';
+    $table = $driver_class::metaTable();
+    if ($table) {
+      $meta = $table->where('alias', $name)->first();
+      $meta && $model_class = $meta['model'];
+    }
+    
+    if (!$model_class && $this->app['config']['model.mapping'][$name] && is_string($this->app['config']['model.mapping'][$name])) {
+      $model_class = $this->app['config']['model.mapping'][$name];
+    }
+    
+    if (!$model_class && !$table) {
       $model_class = $base_class;
-      $enabledSync = false;
-    } elseif (is_string($mapping[$name])) {
-      $duration = 0;
-      $model_class = $mapping[$name];
-      $enabledSync = false;
-    } elseif (is_array($mapping[$name])) {
-      $model_class = $mapping[$name][0];
-      $duration = count($mapping[$name]) > 1 ? intval($mapping[$name][1]) : 0;
-      $enabledSync = count($mapping[$name]) > 2 ? boolval($mapping[$name][2]) : true;
-    } else {
-      $duration = 0;
-      $model_class = $base_class;
-      $enabledSync = false;
     }
     
     try {
       if (!$model_class || !class_exists($model_class) || !(new $model_class) instanceof $base_class) {
         throw new InvalidArgumentException;
       }
-      $instance = new $driver_class($name, $model_class, $duration, $enabledSync);
+      $instance = new $driver_class($name, $model_class);
       if (!$instance instanceof DriverContract) {
         throw new InvalidArgumentException;
       }

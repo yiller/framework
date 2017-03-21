@@ -7,7 +7,6 @@ use YitOS\Support\Facades\WebSocket;
 
 /**
  * 检查是否已为客户端分配令牌
- *
  * @author yiller <tech.yiller@yitos.cn>
  * @package YitOS\WebSocket\Middleware
  */
@@ -18,6 +17,7 @@ class CheckForClientToken {
    * 否则抛出403错误
    * @param Request $request
    * @param Closure $next
+   * @return mixed
    */
   public function handle(Request $request, Closure $next) {
     if (!WebSocket::tokenExists()) {

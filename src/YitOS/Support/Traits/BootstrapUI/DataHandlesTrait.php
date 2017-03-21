@@ -1,81 +1,64 @@
-<?php namespace YitOS\Support\Traits;
+<?php namespace YitOS\Support\Traits\BootstrapUI;
 
 use RuntimeException;
-use Illuminate\Support\Facades\View;
 use Illuminate\Http\Request;
 
 /**
- * 数据表单分离类
- *
+ * 数据处理分离类
  * @author yiller <tech.yiller@yitos.cn>
- * @package YitOS\Support\Traits
+ * @package YitOS\Support\Traits\BootstrapUI
  */
-trait DataFormTrait {
+trait DataHandlesTrait {
+  use CommonTrait;
   
   /**
-   * 加载配置
-   * 
-   * @access protected
-   * @return array
+   * 数据处理控制器构造函数
+   * @access public
+   * @return void
    * 
    * @throws RuntimeException
    */
-  protected function configDF() {
-    if (!property_exists($this, 'name') || !property_exists($this, 'route') || 
-        !method_exists($this, 'definedBuilder') || !method_exists($this, 'definedElements')) {
-      throw new RuntimeException(trans('ui::exception.form_not_supported'));
+  protected function initial() {
+    // 数据处理入口
+    if (!property_exists($this, 'handleUrl') || !$this->handle_url) {
+      $this->handle_url = action('\\'.get_class($this).'@handle');
     }
     
-    $config = [];
-    $config['name'] = $this->name;
-    if (!(app('routes')->hasNamedRoute($this->route.'.handle'))) {
-      throw new RuntimeException(trans('ui::exception.form_not_supported'));
+    $sections = [];
+    foreach ($this->columns as $key => $element) {
+      if (!isset($element['section'])) continue;
+      $element = $this->formatElementForHandle($element);
+      $label = $element['section'];
+      $slug = substr(md5($label),0,5);
+      isset($sections[$slug]) || $sections[$slug] = ['label' => $label, 'elements' => []];
+      unset($element['section']);
+      $sections[$slug]['elements'][$key] = $element;
     }
-    $config['handle_url'] = route($this->route.'.handle');
-    
-    $elements = [];
-    foreach ($this->definedElements() as $element) {
-      $elements[$element['alias']] = [
-        'name'  => $element['alias'],
-        'label' => $element['name'],
-        'type'  => $element['structure'],
-      ];
+    $this->sections = $sections;
+    if (!$this->sections) {
+      throw new RuntimeException(trans('ui::exception.handles_not_supported'));
     }
-    $elements['parent_id'] = [
-      'name' => 'parent_id', 'label' => '上级分类', 'type' => 'parent_id', 'extra' => ['class' => 'input-medium']
-    ];
-    $elements['sort_order'] = [
-      'name' => 'sort_order', 'label' => '排列序号', 'type' => 'integer', 'extra' => ['class' => 'input-xsmall'], 'helper' => '排列序号越小越靠前'
-    ];
-    $sections = method_exists($this, 'elementsConfigured') ? $this->elementsConfigured($elements) : [['label' => '', 'elements' => $elements]];
-    $config['sections'] = [];
-    foreach ($sections as $key => $section) {
-      $elements = [];
-      foreach ($section['elements'] as $element) {
-        $name = $element['name'];
-        if (!isset($element['bind']) || !is_string($element['bind'])) { $element['bind'] = $name; }
-        if (!isset($element['extra']) || !is_array($element['extra'])) { $element['extra'] = []; }
-        $method = 'get'.studly_case($element['type']).'Element';
-        $element = method_exists($this, $method) ? $this->$method($element) : $this->getDefaultElement($element);
-        if (!array_key_exists('template', $element) || 
-            !is_string($element['template']) || 
-            !View::exists($element['template'])) {
-          if ($element['type'] == 'integer') {
-            $element['template'] = 'ui::form.string';
-          } else {
-            $element['template'] = 'ui::form.'.$element['type'];
-          }
-        }
-        $elements[$name] = $element;
-      }
-      $section['elements'] = $elements;
-      $section['is_active'] = empty($config['sections']);
-      $config['sections'][$key] = $section;
-    }
-    if (!$config['sections']) {
-      throw new RuntimeException(trans('ui::exception.form_not_supported'));
-    }
-    return $config;
+    method_exists($this, 'customize') && $this->customize();
+  }
+  
+  /**
+   * 为表单渲染规范元素定义
+   * @access protected
+   * @param array $element
+   * @return array
+   */
+  protected function formatElementForHandle($element) {
+    // 元素类型规范
+    $method = 'get'.studly_case($element['type']).'Element';
+    $method = method_exists($this, $method) ? $method : 'getDefaultElement';
+    $element = $this->$method($element);
+    // 元素额外样式和属性的定义
+    $element['extra'] = isset($element['extra']) && $element['extra'] && is_array($element['extra']) ? $element['extra'] : [];
+    // 元素模板
+    $template = isset($element['template']) && $element['template'] && is_string($element['template']) ? $element['template'] : 'ui::form.'.$element['type'];
+    view()->exists($template) || $template = 'ui::form.string';
+    $element['template'] = $template;
+    return $element;
   }
   
   /**
@@ -107,6 +90,27 @@ trait DataFormTrait {
     $element['options'] = $children(isset($element['parent_id']) ? $element['parent_id'] : '');
     array_unshift($element['options'], ['divider' => 1]);
     return $this->getSelectElement($element);
+  }
+  
+  /**
+   * 获得JSON的配置
+   * @access protected
+   * @param array $element
+   * @return array
+   */
+  protected function getJsonElement($element) {
+    $method = isset($element['items_getter']) && $element['items_getter'] && is_string($element['items_getter']) ? $element['items_getter'] : 'get'.studly_case($element['name']).'Items';
+    if (isset($element['items']) && is_array($element['items'])) {
+      $items = $element['items'];
+    } elseif (method_exists($this, $method)) {
+      $items = $this->$method();
+    } else {
+      $items = [];
+    }
+    $element['items'] = [];
+    foreach ($items as $item) $element['items'][$item['name']] = $this->formatElementForHandle($item);
+    $element['header'] = $element['line'] = null;
+    return $element;
   }
   
   /**
@@ -170,8 +174,8 @@ trait DataFormTrait {
     };
     
     $element['type'] = 'repeat';
-    $element['header_render'] = $header_render;
-    $element['line_render'] = $line_render;
+    $element['header'] = $header_render;
+    $element['line'] = $line_render;
     return $element;
   }
   
@@ -193,40 +197,11 @@ trait DataFormTrait {
    * @return array
    */
   protected function getRadioElement($element) {
-    array_key_exists('options', $element) || $element['options'] = ['否', '是'];
-    $default = ''; $options = []; $first = true;
-    foreach ($element['options'] as $key => $value) {
-      $options[] = ['label' => $value, 'value' => $key];
-      if ($first) { $default = $key; $first = false; }
-    }
-    if (!array_key_exists('default', $element)) {
-      $element['default'] = $default;
-    }
+    $element['options'] = isset($element['options']) && $element['options'] && is_array($element['options']) ? $element['options'] : ['否', '是'];
+    $options = [];
+    foreach ($element['options'] as $key => $val) $options[] = ['label' => $val, 'value' => $key];
+    $element['default'] = isset($element['default']) && array_key_exists($element['default'], $element['options']) ? $element['default'] : array_keys($element['options'])[0];
     $element['options'] = $options;
-    
-    $template = '';
-    array_key_exists('template', $element) && is_string($element['template']) && View::exists($element['template']) && $template = $element['template'];
-    if (count($options) > 2) {
-      $template = $template ?: 'ui::form.radio';
-    } elseif (count($options) == 2) {
-      $element['off'] = $element['on'] = [];
-      foreach ($options as $option) {
-        if ($element['off']) {
-          $element['on'] = $option;
-        } else {
-          $element['off'] = $option;
-        }
-      }
-      $template = $template ?: 'ui::form.switch';
-    } else {
-      $element['off'] = ['label' => '关闭', 'value' => 0];
-      foreach ($options as $option) {
-        $element['on'] = $option;
-      }
-      $template = $template ?: 'ui::form.switch';
-    }
-    
-    $element['template'] = $template;
     return $element;
   }
   
@@ -271,13 +246,27 @@ trait DataFormTrait {
   
   /**
    * 显示编辑表单
-   * 
    * @access public
    * @param \Illuminate\Http\Request $request
    * @return \Illuminate\Http\Response
    */
-  public function edit(Request $request) {
-    $data = method_exists($this, 'formRenderring') ? $this->formRenderring($this->configDF()) : $this->configDF();
+  public function index(Request $request) {
+    $template = 'ui::form.layout';
+    property_exists($this, 'template') && view()->exists($this->template) && $template = $this->template;
+    $data = [
+      'handle_url' => $this->handle_url,
+      'sections' => $this->sections,
+      'method' => 'save',
+      'data' => []
+    ];
+    if ($data['data']) {
+      $data['title'] = trans('ui::form.modal.title_edit', ['name' => $this->name, '__' => $__]);
+    } else {
+      $data['title'] = trans('ui::form.modal.title_create', ['name' => $this->name]);
+    }
+    return view($template, $data);
+    
+    /*$data = method_exists($this, 'formRenderring') ? $this->formRenderring($this->configDF()) : $this->configDF();
     array_key_exists('modal_title_icon', $data) || $data['modal_title_icon'] = 'fa fa-cubes';
     $template = array_key_exists('template', $data) && View::exists($data['template']) ? $data['template'] : 'ui::form.layout';
     $data['data'] = [];
@@ -298,7 +287,7 @@ trait DataFormTrait {
       array_key_exists('modal_title', $data) || $data['modal_title'] = trans('ui::form.modal.title_create', ['name' => $data['name']]);
     }
     $data['method'] = 'save';
-    return view($template, $data);
+    return view($template, $data);*/
   }
   
   /**
@@ -306,83 +295,99 @@ trait DataFormTrait {
    * @access public
    * @param \Illuminate\Http\Request $request
    * @return \Illuminate\Http\Response
+   * 
+   * @throws RuntimeException
    */
   public function handle(Request $request) {
     $method = $request->has('method') ? $request->get('method') : 'save';
-    if (!method_exists($this, $method)) {
-      throw new RuntimeException(trans('ui::exception.form.handle_not_supported', ['handle' => $method]));
+    $enabled = false;
+    if ($method == 'save') {
+      $enabled = $request->has('__') ? array_key_exists('edit', $this->handles) : $this->enabled_add;
+    } else {
+      $enabled = array_key_exists($method, $this->handles);
+    }
+    if (!$enabled || !method_exists($this, 'handle'.studly_case($method))) {
+      if (($request->ajax() && ! $request->pjax()) || $request->wantsJson()) {
+        return response()->json(['message' => trans('ui::exception.handles.handle_not_supported')], 405);
+      } else {
+        throw new RuntimeException(trans('ui::exception.handles.handle_not_supported'));
+      }
     }
     
     $data = method_exists($this, 'get'.studly_case($method).'Data') ? $this->{'get'.studly_case($method).'Data'}() : $request->all();
-    $config = method_exists($this, 'formRenderring') ? $this->formRenderring($this->configDF()) : $this->configDF();
-    if ($this->$method($data)) {
-      $message = property_exists($this, 'handle_'.$method.'_success') ? $this->{'handle_'.$method.'_success'} : trans('ui::form.handle.'.$method.'_success', ['name' => $config['name']]);
+    if ($method == 'save') {
+      extract($this->getColumnsRules());
+      $validator = method_exists($this, 'getSaveValidator') ? $this->getSaveValidator($data, $rules, $messages) : ($rules ? \Illuminate\Support\Facades\Validator::make($data, $rules, $messages) : null);
+    } else {
+      $validator = method_exists($this, 'get'.studly_case($method).'Validator') ? $this->{'get'.studly_case($method).'Validator'}($data) : null;
+    }
+    $validator && $this->validateWith($validator);
+    unset($data['_token'], $data['method']);
+    // $config = method_exists($this, 'formRenderring') ? $this->formRenderring($this->configDF()) : $this->configDF();
+    if ($this->{'handle'.studly_case($method)}($data)) {
+      $message = property_exists($this, 'handle_'.$method.'_success') ? $this->{'handle_'.$method.'_success'} : trans('ui::form.handle.'.$method.'_success', ['name' => $this->name]);
       $status = 1;
     } else {
-      $message = property_exists($this, 'handle_'.$method.'_success') ? $this->{'handle_'.$method.'_failure'} : trans('ui::form.handle.'.$method.'_failure', ['name' => $config['name']]);
+      $message = property_exists($this, 'handle_'.$method.'_success') ? $this->{'handle_'.$method.'_failure'} : trans('ui::form.handle.'.$method.'_fail', ['name' => $this->name]);
       $status = 0;
     }
     return response()->json(compact('status', 'message'));
   }
   
   /**
+   * 获得列定义的数据规则
+   * @access protected
+   * @return array
+   */
+  protected function getColumnsRules() {
+    $rules = $messages = [];
+    foreach ($this->columns as $key => $column) {
+      if (!isset($column['rules'])) continue;
+      $rule = $message = [];
+      if (is_string($column['rules'])) {
+        $rule[$key] = $column['rules'];
+      } elseif (is_array($column['rules'])) {
+        $rule = $column['rules'];
+      }
+      if (isset($column['messages'])) {
+        if (is_string($column['messages']) && is_string($column['rules'])) {
+          $k = (false === ($pos = strpos($column['rules'], ':'))) ? $column['rules'] : substr($column['rules'],0,$pos);
+          $message[$key.'.'.$k] = $column['messages'];
+        } elseif (is_array($column['messages'])) {
+          $message = $column['messages'];
+        }
+      }
+      if (!$rule) continue;
+      $rules = array_merge($rules, $rule);
+      $messages = array_merge($messages, $message);
+    }
+    return compact('rules', 'messages');
+  }
+  
+  /**
    * 保存数据
    * @access protected
-   * @param \YitOS\MModelFactory\Eloquent\Model|array $data
-   * @return bool
-   * 
-   * @throws \Illuminate\Foundation\Validation\ValidationException
+   * @param array $data
+   * @return mixed
    */
-  protected function save($data) {
-    $builder = $this->definedBuilder();
-    
-    // 验证数据
-    $rules = []; $messages = [];
-    $config = method_exists($this, 'formRenderring') ? $this->formRenderring($this->configDF()) : $this->configDF();
-    $sections = $config['sections'];
-    foreach ($sections as $section) {
-      foreach ($section['elements'] as $key => $element) {
-        if (!isset($element['rules'])) {
-          continue;
-        }
-        $rule = $message = [];
-        if (is_string($element['rules'])) {
-          $rule[$key] = $element['rules'];
-        } elseif (is_array($element['rules'])) {
-          $rule = $element['rules'];
-        }
-        if (isset($element['messages'])) {
-          if (is_string($element['messages']) && is_string($element['rules'])) {
-            if (strpos($element['rules'], ':') !== false) {
-              list($k,) = explode(':', $element['rules']);
-              $message[$key.'.'.$k] = $element['messages'];
-            } else {
-              $message[$key.'.'.$element['rules']] = $element['messages'];
-            }
-          } elseif (is_array($element['messages'])) {
-            $message = $element['messages'];
-          }
-        }
-        if (!$rule) {
-          continue;
-        }
-        $rules = array_merge($rules, $rule);
-        $messages = array_merge($messages, $message);
+  protected function handleSave(array $data) {
+    $builder = $this->builder();
+    if ($builder instanceof \Illuminate\Database\Query\Builder) {
+      $__ = isset($data['__']) ? $data['__'] : '';
+      if ($__) {
+        $__ = $builder->update(['_id' => $__], $data) ? $__ : '';
+      } else {
+        $__ = $builder->insertGetId($data);
       }
-    }
-    
-    if (method_exists($this, 'getSaveValidator')) {
-      $validator = $this->getSaveValidator($data, $rules, $messages);
-    } elseif ($rules) {
-      $validator = \Illuminate\Support\Facades\Validator::make($data, $rules, $messages);
+      dd($__);
     } else {
-      $validator = null;
+      $model = $this->builder()->save($data);
+      dd($model);
     }
-    
-    $validator && $this->validateWith($validator);
     // 处理数据保存
-    $__ = '';
-    $model = $builder->save($data);
+    /*$__ = '';
+    $model = $this->builder()->save($data);
+    dd($model);
     if ($model) {
       $__ = $model->_id;
       if ($model->parents) {
@@ -393,7 +398,7 @@ trait DataFormTrait {
         return $builder->model()->modelSaved($__);
       }
     }
-    return $__;
+    return $__;*/
     
       /*$model = null;
       if (isset($data['__']) && ($model = $builder->find($data['__']))) {

@@ -1,45 +1,48 @@
-<form action="{{ $handle_url }}" method="post" class="form-horizontal" enctype="multipart/form-data" role="form">
-  
-  {{-- Begin: Dataform --}}
-  <div class="modal-header">
-    <button type="button" class="close" data-dismiss="modal" aria-hidden="true"></button>
-    <h4 class="modal-title">
-      <div class="caption">
-        <i class="{{ $modal_title_icon }} font-dark"></i>
-        <span class="caption-subject font-dark">{{ $modal_title }}</span>
+<div class="row">
+  <div class="col-md-12">
+    {{-- Begin: DataForm --}}
+    <form action="{{ $handle_url }}" method="post" class="form-horizontal form-ajax" enctype="multipart/form-data" role="form">
+      <div class="portlet light portlet-fit portlet-datatable bordered">
+        <div class="portlet-title">
+          <div class="caption">
+            <i class="{{ $icon or 'fa fa-cubes' }} font-dark"></i>
+            <span class="caption-subject font-dark"> {{ $title }}</span>
+          </div>
+          <div class="actions btn-set">
+            <input type="hidden" name="_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="method" value="{{ $method }}">
+            @if ($data)
+            <input type="hidden" name="__" value="{{ $data['__'] }}">
+            @endif
+            <button type="button" ui-sref="system_cache" name="back" class="btn btn-secondary-outline"><i class="fa fa-angle-left"></i> {{ trans('ui::form.button.back') }} </button>
+            <button type="reset" class="btn btn-secondary-outline"><i class="fa fa-reply"></i> {{ trans('ui::form.button.reset') }} </button>
+            <button type="submit" class="btn green mt-ladda-btn ladda-button" data-style="expand-left" data-spinner-color="#fff">
+              <span class="ladda-label">
+                {{ trans('ui::form.button.submit') }} 
+              </span>
+            </button>
+          </div>
+        </div>
+        <div class="portlet-body">
+          <div class="tabbable-line">
+            <ul class="nav nav-tabs nav-tabs-lg">
+              @foreach ($sections as $slug => $section)
+              <li class="{{ $section == reset($sections) ? 'active' : '' }}"><a href="javascript:;" data-target="#tab_{{ $slug }}" data-toggle="tab"> {{ $section['label'] }} </a></li>
+              @endforeach
+            </ul>
+            <div class="tab-content">
+              @foreach ($sections as $slug => $section)
+              <div class="tab-pane {{ $section == reset($sections) ? 'active' : '' }}" id="tab_{{ $slug }}">
+                @foreach ($section['elements'] as $element)
+                @include($element['template'], $element)
+                @endforeach
+              </div>
+              @endforeach
+            </div>
+          </div>
+        </div>
       </div>
-    </h4>
-    @if (count($sections) > 1)
-    <div class="tabbable-line">
-      <ul class="nav nav-tabs">
-        @foreach ($sections as $section_name => $section)
-        <li class="{{ $section['is_active'] ? 'active' : '' }}"><a href="javascript:;" data-target="#tab_{{ $section_name }}" data-toggle="tab"> {{ $section['label'] }} </a></li>
-        @endforeach
-      </ul>
-    </div>
-    @endif
+    </form>
+    {{-- End: DataForm --}}
   </div>
-  <div class="modal-body tab-content">
-    @foreach ($sections as $section_name => $section)
-    <div id="tab_{{ $section_name }}" class="tab-pane-modal">
-      @foreach ($section['elements'] as $element)
-      @include($element['template'], $element)
-      @endforeach
-    </div>
-    @endforeach
-  </div>
-  <div class="modal-footer">
-    <input type="hidden" name="_token" value="{{ csrf_token() }}">
-    <input type="hidden" name="method" value="{{ $method }}">
-    @if ($data)
-    <input type="hidden" name="__" value="{{ $data['_id'] }}">
-    @endif
-    <button type="button" data-dismiss="modal" class="btn btn-outline dark">{{ trans('ui::form.modal.button_close') }} </button>
-    <button type="submit" class="btn green mt-ladda-btn ladda-button" data-style="expand-left" data-spinner-color="#fff">
-      <span class="ladda-label">
-        {{ trans('ui::form.modal.button_submit') }} 
-      </span>
-    </button>
-  </div>
-  {{-- End: Dataform --}}
-</form>
+</div>

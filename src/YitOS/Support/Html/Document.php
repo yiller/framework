@@ -19,7 +19,7 @@ class Document {
    * 允许的html标签
    * @var array
    */
-  protected $allow_tags = ['h1','h2','h3','h4','h5','h6','blockquote','div','p','span','b','i','u','strong','font','header','footer','section','aside','img','a','ul','ol','li','dl','dt','dd'];
+  protected $allow_tags = ['h1','h2','h3','h4','h5','h6','blockquote','div','p','span','b','i','u','strong','font','header','footer','section','aside','img','a','ul','ol','li','dl','dt','dd','form','input','select','option','label','fieldset','legend'];
   
   /**
    * 节点的属性值列表
@@ -101,16 +101,17 @@ class Document {
    * 根据节点的起始html获得节点内容
    * @access protected
    * @param string $html
+   * @param integer $n
    * @return string
    */
-  protected function getNodeHtml($html) {
+  protected function getNodeHtml($html, $n = 0) {
     $tag = trim(substr($html,1,strpos($html, ' ')));
     if (!in_array($tag, $this->allow_tags)) {
       return '';
     }
-    $start = strpos($this->html, $html);
-    if ($tag == 'img') {
-      $end = strpos($this->html, '>', $start) + strlen('>');
+    $start = strpos($this->html, $html, $n);
+    if ($tag == 'img' || $tag == 'input') {
+      $end = strpos($this->html, '>', $start);
       ($end !== false) && ($end += strlen('>'));
     } else {
       $n = 1;
@@ -141,24 +142,26 @@ class Document {
       if (!preg_match_all('/'.$pattern.'/i', $this->html, $matches)) {
         continue;
       }
-      if ($classname) {
-        $nodes = [];
-        foreach ($matches[0] as $match) {
+      
+      $nodes = [];
+      foreach ($matches[0] as $match) {
+        $hit = true;
+        if ($classname) {
           if (!preg_match('/class\s*=[\'|"](.+?)[\'|"]/i', $match, $styles)) {
             continue;
           }
           $styles = explode('$$$', preg_replace('/\s+/i', '$$$', strtolower($styles[1])));
-          $hit = true;
           foreach ($classname as $cls) {
             if (!in_array(strtolower($cls), $styles)) { $hit = false; break; }
           }
-          $hit && $nodes[] = $match;
         }
-      } else {
-        $nodes = $matches[0];
+        $hit && $nodes[] = $match;
       }
+      $n = 0;
       foreach ($nodes as $node) {
-        $html = $this->getNodeHtml($node);
+        if ($n === false) { break; }
+        $html = $this->getNodeHtml($node, strpos($this->html, $node, $n));
+        $n = strpos($this->html, $node, $n) + strlen($node);
         if (!$html) { continue; }
         $collect->push(new Document($html));
       }
@@ -188,11 +191,20 @@ class Document {
     }
     if (!$this->attributes) {
       $html = substr($this->html,0,strpos($this->html,'>') + 1);
-      if (preg_match_all('/([a-z\-_]+)\s*=[\'|"](.+?)[\'|"]/i', $html, $matches)) {
+      if (preg_match_all('/([a-z\-_]+)\s*="(.+?)"/i', $html, $matches)) {
         for ($i = 0; $i < count($matches[0]); $i++) {
           $k = trim($matches[1][$i]);
           $v = trim($matches[2][$i]);
           $this->attributes[$k] = $v;
+        }
+      }
+      if (preg_match_all('/([a-z\-_]+)\s*=(.+?) /i', $html, $matches)) {
+        for ($i = 0; $i < count($matches[0]); $i++) {
+          $k = trim($matches[1][$i]);
+          $v = trim($matches[2][$i]);
+          $v = trim($v, '"');
+          $v = trim($v, "'");
+          !isset($this->attributes[$k]) && $this->attributes[$k] = $v;
         }
       }
     }
@@ -208,6 +220,31 @@ class Document {
   public function attr($name) {
     $attrs = $this->attrs();
     return isset($attrs[$name]) ? $attrs[$name] : '';
+  }
+  
+  /**
+   * 根据名称获得节点自定义属性
+   * @access public
+   * @param string $name
+   * @return string
+   */
+  public function data($name) {
+    return $this->attr('data-'.$name);
+  }
+  
+  /**
+   * 获得节点的内容HTML
+   * @access public
+   * @return string
+   */
+  public function html() {
+    $tag = trim(substr($this->html,1,strpos($this->html, ' ')));
+    if (!in_array($tag, $this->allow_tags) || $tag == 'img' || $tag == 'input') {
+      return '';
+    }
+    $start = strpos($this->html, '>') + 1;
+    $end = strrpos($this->html, '</');
+    return trim(substr($this->html, $start, $end - $start));
   }
   
 }

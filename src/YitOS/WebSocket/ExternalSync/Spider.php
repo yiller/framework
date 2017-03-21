@@ -68,28 +68,48 @@ abstract class Spider extends Connector {
   abstract protected function hasMore($html);
   
   /**
+   * 根据html解析产品列表
+   * @access protected
+   * @param string $html
+   * @return array
+   */
+  abstract protected function getEntities($html);
+  
+  /**
+   * 根据html解析产品详情
+   * @access protected
+   * @param string $html
+   * @return array
+   */
+  abstract protected function getEntity($html);
+  
+  /**
    * 获得页面的html
    * @access protected
    * @param string $url
    * @param string $type
    * @param integer $page
+   * @param string filename
    * @return string
    * 
    * @throws RuntimeException
    */
-  protected function html($url, $type, $page = 1) {
+  protected function html($url, $type, $filename = '', $page = 1) {
     if (!in_array($type, ['listings', 'detail'])) {
       throw new RuntimeException('非法调用');
     }
     $storage = app('filesystem')->disk('local');
-    $id = $this->getExternalId($url, $type);
+    $filename || $filename = $this->getExternalId($url, $type);
+    if (!$filename) {
+      throw new RuntimeException('页面分析失败（未能解析扩展编号）');
+    }
     if ($type == 'listings') {
-      $file = 'connector/'.trim($this->getStorageDirectory(), '/').'/listings/'.$id.'-'.$page.'.html';
+      $file = 'connector/'.trim($this->getStorageDirectory(), '/').'/listings/'.$filename.'-'.$page.'.html';
     } else {
-      $file = 'connector/'.trim($this->getStorageDirectory(), '/').'/detail/'.$id.'.html';
+      $file = 'connector/'.trim($this->getStorageDirectory(), '/').'/detail/'.$filename.'.html';
     }
     if (!$storage->exists($file)) {
-      $content = $this->catch(compact('url', 'id', 'type', 'page'));
+      $content = $this->catch(compact('url', 'type', 'page'));
       $content && $storage->put($file, $content);
     } else {
       $content = $storage->get($file);
@@ -113,22 +133,48 @@ abstract class Spider extends Connector {
     // 计算分类页面的扩展编号
     $category_id = $this->getExternalId($url, 'listings');
     if (!$category_id) {
-      throw new RuntimeException('列表页面分析失败（未能获得扩展编号）');
+      throw new RuntimeException('列表页面分析失败（未能解析扩展编号）');
     }
     $external = ['enabled' => 1, 'source' => $this->alias, 'url' => $url, 'id' => $category_id];
     // 抓取并保存页面
-    $html = $this->html($url, 'listings', $page);
+    $html = $this->html($url, 'listings', '', $page);
     // 根据列表页面解析元素
-    $entities = [];
+    $entities = $this->getEntities($html);
+    // 子级列表
+    $listings = $model->rel_children->pluck('_id')->all();
     // 是否还有更多分页
     if ($this->hasMore($html)) {
       $next = $page + 1;
-      $handle  = "line_status('".$model->_id."', 'loading', ".json_encode([$category_id, '', '', '第 '.$page.' 页抓取成功，正在抓取第'.$next.'页']).");";
+      $handle  = "line_status('".$model->_id."', 'loading', ".json_encode([$category_id, '', '', '第 '.$page.' 页抓取成功，正在抓取第'.$next.'页...']).");";
       $handle .= "listings('".$model->_id."',".($page+1).");";
     } else {
-      throw new RuntimeException('列表完成');
+      $handle  = "line_status('".$model->_id."', 'success', ".json_encode(['', '', '', '分类列表抓取完成']).");";
+      $handle .= 'CONT';
     }
-    return compact('external', 'entities', 'handle');
+    return compact('external', 'listings', 'entities', 'handle');
+  }
+  
+  /**
+   * 获得实体详情
+   * @access public
+   * @param ExternalSyncModelContract $model
+   * @return array
+   * 
+   * @throws RuntimeException
+   */
+  public function detail(ExternalSyncModelContract $model) {
+    $url = $model->getExternalUrl();
+    // 抓取并保存页面
+    $html = $this->html($url, 'detail');
+    $entity = $this->getEntity($html);
+    if (!isset($entity['sku']) || $entity['sku'] != $model->getExternalId()) {
+      throw new RuntimeException('页面分析失败（扩展编号不匹配）');
+    }
+    unset($entity['sku']);
+    $entity = array_replace_recursive($model->getAttributes(), $entity);
+    $handle  = "line_status('', 'success', ".json_encode(['', '', '', '商品信息抓取完成']).");";
+    $handle .= 'CONT';
+    return compact('entity', 'handle');
   }
   
   /**
@@ -148,7 +194,7 @@ abstract class Spider extends Connector {
    * @access protected
    * @return string
    * 
-   * @throw \RuntimeException
+   * @throws RuntimeException
    */
   protected function getTag() {
     if (!property_exists($this, 'options') || !is_array($this->options) || !isset($this->options['tag'])) {
@@ -162,7 +208,7 @@ abstract class Spider extends Connector {
    * @access protected
    * @return string
    * 
-   * @throw \RuntimeException
+   * @throws RuntimeException
    */
   protected function getSource() {
     if (!property_exists($this, 'options') || !is_array($this->options) || !isset($this->options['source'])) {
@@ -176,7 +222,7 @@ abstract class Spider extends Connector {
    * @access protected
    * @return array
    * 
-   * @throw \RuntimeException
+   * @throws RuntimeException
    */
   protected function getExtraParams() {
     if (!property_exists($this, 'options') || !is_array($this->options)) {

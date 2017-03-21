@@ -9,6 +9,7 @@ return [
   'sync' => [
     'controller_not_supported' => '控制器不支持第三方远端同步',
     'model_not_supported' => '模型不支持第三方远端同步',
+    'entity_parameter_is_missing' => '实体同步参数错误',
     'template_not_found' => '模板没有找到',
     'api_not_supported' => '同步接口（:name）不支持',
   ]

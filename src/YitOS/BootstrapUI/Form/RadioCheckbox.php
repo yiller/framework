@@ -2,12 +2,11 @@
 
 /**
  * 单（多）选（表单）前端助手
- *
  * @author yiller <tech.yiller@yitos.cn>
  * @package YitOS\BootstrapUI\Form
  * @see \YitOS\BootstrapUI\Form\Element
  */
-class Choose extends Element {
+class RadioCheckbox extends Boolean {
   
   /**
    * 元素类型
@@ -16,27 +15,10 @@ class Choose extends Element {
   protected $type = 'radio';
   
   /**
-   * 备选项目列表
-   * @var array 
-   */
-  protected $options = [];
-  
-  /**
-   * 设置备选项
-   * @access public
-   * @param array $options
-   * @return \YitOS\Foundation\BootstrapUI\Form\Choose
-   */
-  public function options($options) {
-    $this->options = $options;
-    return $this;
-  }
-  
-  /**
    * 多选
    * @access public
    * @param bool $checkbox
-   * @return \YitOS\Foundation\BootstrapUI\Form\Choose
+   * @return \YitOS\Foundation\BootstrapUI\Form\RadioCheckbox
    */
   public function multi() {
     $this->type = 'checkbox';

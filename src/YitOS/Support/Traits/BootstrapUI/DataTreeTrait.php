@@ -11,21 +11,24 @@ use Illuminate\Http\Request;
 trait DataTreeTrait {
   
   /**
-   * 加载配置
-   * @access protected
-   * @return array
+   * 结构树控制器构造函数
+   * @access public
+   * @return void
    * 
    * @throws RuntimeException
    */
-  protected function configDT() {
-    if (!property_exists($this, 'name') || !property_exists($this, 'route') || 
+  public function __construct() {
+    // 检查控制器关键成员是否定义
+    if (!property_exists($this, 'name') || !property_exists($this, 'route_prefix') || 
         !method_exists($this, 'builder') || !method_exists($this, 'elements')) {
       throw new RuntimeException(trans('ui::exception.tree_not_supported'));
     }
+    // 数据源获取入口
+    if (!property_exists($this, 'dataUrl') && !$this->dataUrl) {
+      $this->dataUrl = action('\\'.get_class($this).'@listing');
+    }
     
     $config = [];
-    $config['name'] = $this->name;
-    $config['data_url'] = property_exists($this, 'dataUrl') ? $this->dataUrl : action('\\'.get_class($this).'@listings');
     
     $config['columns'] = [];
     foreach ($this->elements() as $element) {
@@ -54,7 +57,7 @@ trait DataTreeTrait {
   }
   
   /**
-   * 渲染数据表格UI
+   * 渲染结构树UI
    * @access public
    * @return \Illuminate\Http\Response
    */

@@ -2,7 +2,6 @@
 
 /**
  * Bootstrap UI元素基类
- *
  * @author yiller <tech.yiller@yitos.cn>
  * @package YitOS\BootstrapUI\Form
  */
@@ -41,32 +40,14 @@ abstract class Element {
   /**
    * 创建实例
    * @access public
+   * @param string $name
+   * @param array $extra
    * @return void
    */
-  public function __construct() {
+  public function __construct($name = '',$extra = []) {
     $this->id = strtolower(str_random(10));
-  }
-  
-  /**
-   * 设置元素的name属性
-   * @access public
-   * @param string $name
-   * @return \YitOS\Foundation\BootstrapUI\Form\Element
-   */
-  public function name($name) {
     $this->name = $name;
-    return $this;
-  }
-  
-  /**
-   * 设置元素的额外属性
-   * @access public
-   * @param string $extra
-   * @return \YitOS\Foundation\BootstrapUI\Form\Element
-   */
-  public function extra($extra) {
     $this->extra = $extra;
-    return $this;
   }
   
   /**
@@ -119,9 +100,7 @@ abstract class Element {
   protected function getExtraAttributes() {
     $attributes = [];
     foreach ($this->extra as $key => $value) {
-      if (in_array($key, ['css', 'class'])) {
-        continue;
-      }
+      if (in_array($key, ['css', 'class'])) continue;
       $attributes[] = $key.'="'.$value.'"';
     }
     return implode(' ', $attributes);
@@ -142,13 +121,14 @@ abstract class Element {
   
   /**
    * 获得元素实例
-   * 
    * @static
    * @access public
+   * @param string $name
+   * @param array $extra
    * @return \YitOS\Foundation\BootstrapUI\Form\Element
    */
-  public static function load() {
-    return new static();
+  public static function load($name, $extra = []) {
+    return new static($name, $extra);
   }
   
   /**

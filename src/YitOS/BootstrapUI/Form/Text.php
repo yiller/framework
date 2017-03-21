@@ -2,7 +2,6 @@
 
 /**
  * 输入框（表单）前端助手
- *
  * @author yiller <tech.yiller@yitos.cn>
  * @package YitOS\BootstrapUI\Form
  * @see \YitOS\BootstrapUI\Form\Element

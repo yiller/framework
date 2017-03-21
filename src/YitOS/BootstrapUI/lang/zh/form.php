@@ -7,6 +7,11 @@ return [
     'button_submit' => '确定提交',
     'button_close'  => '关闭窗口',
   ],
+  'button' => [
+    'submit' => '保存数据',
+    'reset'  => '重置数据',
+    'back'   => '返回列表',
+  ],
   'select' => [
     'placeholder' => '-- 请选择 --',
   ],
@@ -22,7 +27,10 @@ return [
   ],
   
   'handle' => [
-    'save_success' => '恭喜你，保存:name成功！',
-    'edit_success' => '恭喜你，编辑:name成功！',
+    'save_success' => '恭喜你，保存:name成功',
+    'save_fail' => ':name保存失败',
+    'rebuild_success' => '恭喜你，:name重建成功',
+    'rebuild_fail' => ':name重建失败',
   ],
+    
 ];

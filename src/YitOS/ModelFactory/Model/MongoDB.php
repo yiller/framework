@@ -15,6 +15,12 @@ class MongoDB extends Eloquent {
   use ParentChildrenTrait;
   
   /**
+   * 数据同步的时间间隔（单位：秒），0代表永不同步
+   * @var integer 
+   */
+  public $duration = 0;
+  
+  /**
    * 所有属性都允许批量赋值
    * @var bool
    */

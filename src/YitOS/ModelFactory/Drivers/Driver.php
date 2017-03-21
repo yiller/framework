@@ -41,7 +41,7 @@ abstract class Driver {
    * 是否需要同步上传
    * @var bool 
    */
-  protected $enabledSync = true;
+  protected $enabledSync = false;
   
   /**
    * 实体结构
@@ -54,38 +54,58 @@ abstract class Driver {
    * @access public
    * @param string $name
    * @param string $classname
-   * @param integer $duration
-   * @param bool $enabledSync
    * @return \YitOS\ModelFactory\Drivers\Driver
    * 
    * @throws \InvalidArgumentException
    */
-  public function __construct($name, $classname, $duration, $enabledSync = true) {
+  public function __construct($name, $classname) {
     // 基本配置
     $this->name = $name;
     $this->classname = $classname;
-    $this->duration = intval($duration);
-    $this->enabledSync = boolval($enabledSync);
-    // 元素定义
-    //Cache::forget('elements_defined_'.$this->name);
-    $elements = Cache::rememberForever('elements_defined_'.$this->name, function() {
-      return $this->getElements();
-    });
-    if (!$elements || !is_array($elements)) {
-      throw new InvalidArgumentException;
+    
+    $table = static::metaTable();
+    if (!$table) return;
+    
+    $meta = $table->where('alias', $name)->first();
+    if (!$meta) {
+      $model = new $classname;
+      extract($this->getMetaBySocket());
+      $meta = [
+        'name'     => $entity['name'],
+        'alias'    => $entity['alias'],
+        'model'    => $classname,
+        'built_in' => !$entity['account_id'],
+        'elements' => $elements,
+        'duration' => intval($model->duration),
+        'synchronized_at' => 0
+      ];
+      $table->insert($meta);
     }
-    $this->elements = $elements;
+    
+    $this->elements = $meta['elements'];
+    $this->duration = intval($meta['duration']);
+    $this->enabledSync = $this->duration > 0;
     
     return $this;
   }
   
   /**
-   * 元素定义
+   * 获得同步配置表
+   * @static
+   * @access public
+   * @return type
+   */
+  public static function metaTable() {
+    return null;
+  }
+  
+  /**
+   * 初始化元素定义
    * @abstract
    * @access protected
    * @return array
    */
-  abstract protected function getElements();
+  abstract protected function getMetaBySocket();
   
   /**
    * 获得SQLBuilder
@@ -94,6 +114,36 @@ abstract class Driver {
    * @return \Illuminate\Database\Eloquent\Builder
    */
   abstract public function builder();
+  
+  /**
+   * 获得实体名字
+   * @accss public
+   * @return string
+   */
+  public function name() {
+    return $this->name;
+  }
+  
+  /**
+   * 获得所有元素配置
+   * @access public
+   * @param string $name
+   * @return mixed
+   */
+  public function elements($name = '') {
+    return $this->elements;
+  }
+  
+  /**
+   * 获得指定元素配置
+   * 
+   * @access public
+   * @param string $name
+   * @return mixed
+   */
+  public function element($name) {
+    return array_key_exists($name, $this->elements) ? $this->elements[$name] : null;
+  }
   
   /**
    * 获得模型实例
@@ -107,30 +157,24 @@ abstract class Driver {
   }
   
   /**
-   * 获得元素配置
+   * 储存多行数据
    * @access public
-   * @param string $name
-   * @return mixed
+   * @param array $multidata
+   * @return array
    */
-  public function elements($name = '') {
-    if (!$name) {
-      return $this->elements;
-    }
-    foreach ($this->elements as $element) {
-      if ($element['alias'] == $name) {
-        return $element;
+  public function saveMany($multidata) {
+    $instances = [];
+    foreach ($multidata as $data) {
+      if (!isset($data['__']) || empty($data['__']) || !($instance = $this->builder()->find($data['__']))) {
+        $instance = $this->instance();
       }
+      unset($data['__'], $data['id']);
+      $instance->fill($data);
+      !$this->enabledSync && $instance->save();
+      $instances[] = $instance;
     }
-    return null;
-  }
-  
-  /**
-   * 获得实体名字
-   * @accss public
-   * @return string
-   */
-  public function name() {
-    return $this->name;
+    $this->enabledSync && $instances = $this->syncUpload($instances);
+    return $instances;
   }
   
   /**
@@ -140,67 +184,71 @@ abstract class Driver {
    * @return mixed
    */
   public function save($data) {
-    if (!isset($data['__']) || !($instance = $this->builder()->find($data['__']))) {
-      $instance = $this->instance();
-    }
-    unset($data['__'], $data['id']);
-    $instance->fill($data);
-    if ($this->enabledSync) {
-      return $this->syncUpload($instance) ?: null;
-    } else {
-      return $instance->save() ? $instance : null;
-    }
+    $instances = $this->saveMany([$data]);
+    return $instances ? $instances[0] : null;
   }
   
   /**
    * 数据同步（上行）
    * @access protected
-   * @param mixed $instance
-   * @return mixed
+   * @param array $instances
+   * @return array
    */
-  protected function syncUpload($instance) {
+  protected function syncUpload($instances) {
     if (!$this->enabledSync) {
-      return $instance->save() ? $instance : null;
+      return [];
     }
     if (!method_exists($this, 'upload')) {
       throw new InvalidArgumentException(trans('modelfactory::exception.method_not_exists', ['method' => 'upload']));
     }
     // 同步准备阶段
     $now = Carbon::now();
-    $attributes = $instance->getAttributes();
     $data = [];
-    foreach ($this->elements as $element) {
-      $data[$element['alias']] = isset($attributes[$element['alias']]) ? $attributes[$element['alias']] : '';
+    foreach ($instances as $instance) {
+      $real_attributes = $instance->getAttributes();
+      $attributes = method_exists($instance, 'uploading') ? $instance->uploading() : $real_attributes;
+      $item = [];
+      foreach ($this->elements as $element) {
+        $item[$element['alias']] = isset($attributes[$element['alias']]) ? $attributes[$element['alias']] : '';
+      }
+      // 不能操纵原库ID、PARENT_ID以及SORT_ORDER要素
+      $item['id'] = isset($real_attributes['id']) ? intval($real_attributes['id']) : 0;
+      $item['parent_id'] = isset($real_attributes['parent_id']) && ($parent = $this->builder()->find($real_attributes['parent_id'])) ? intval($parent->id) : 0;
+      $item['sort_order'] = isset($real_attributes['sort_order']) ? intval($real_attributes['sort_order']) : 0;
+      $data[] = $item;
     }
-    $data['id'] = isset($attributes['id']) ? intval($attributes['id']) : 0;
-    $data['parent_id'] = isset($attributes['parent_id']) && ($parent = $this->builder()->find($attributes['parent_id'])) ? intval($parent->id) : 0;
-    $data['sort_order'] = isset($attributes['sort_order']) ? intval($attributes['sort_order']) : 0;
-    method_exists($this->instance(), 'uploading') && $data = $this->instance()->uploading($data);
     app('log')->info('数据同步（上行）开始', ['name' => $this->name]);
     // 开始同步
     $respond = $this->upload($data);
     if (!$respond) {
       app('log')->emergency('数据同步（上行）失败', ['name' => $this->name]);
-      return false;
+      return null;
     }
     extract($respond);
-    $model = $this->builder()->updateOrCreate(['id' => $data['id']], $data);
-    // 上行同步之后
-    $model && method_exists($this, 'synchronized') && $model = $this->synchronized($model);
-    $model && method_exists($model, 'synchronized') && $model = $model->synchronized();
-    if (!$model) {
-      app('log')->emergency('数据同步（上行）失败，基库编号：#'.$data['id'], ['name' => $this->name]);
-      return false;
+    $models = [];
+    foreach ($data as $item) {
+      $models[] = $this->builder()->updateOrCreate(['id' => $item['id']], $item);
+    }
+    // 同步之后执行
+    $objects = [];
+    foreach ($models as $model) {
+      $model && method_exists($this, 'synchronized') && $model = $this->synchronized($model);
+      $model && method_exists($model, 'synchronized') && $model = $model->synchronized();
+      $model && $objects[] = $model;
+    }
+    if (!$objects) {
+      app('log')->emergency('数据同步（上行）失败', ['name' => $this->name]);
+      return null;
     }
     $related = isset($related) ? $related : [];
     foreach ($related as $alias => $recs) {
       foreach ($recs as $k => $rec) {
-        $instance = M($alias)->where('id', $k)->first();
+        $instance = M($alias)->builder()->where('id', $k)->first();
         $instance && $instance->update($rec);
       }
     }
-    app('log')->info('数据同步（上行）成功，基库编号：# '.$model->id, ['name' => $this->name]);
-    return true;
+    app('log')->info('数据同步（上行）成功，成功同步 '.count($objects).' 条记录', ['name' => $this->name]);
+    return $objects;
   }
   
   /**
@@ -212,27 +260,22 @@ abstract class Driver {
     if (!$this->enabledSync) {
       return true;
     }
+    
+    $table = static::metaTable();
     if (!method_exists($this, 'download')) {
       throw new InvalidArgumentException(trans('modelfactory::exception.method_not_exists', ['method' => 'download']));
     }
-    if (!method_exists($this, '_sync')) {
-      throw new InvalidArgumentException(trans('modelfactory::exception.method_not_exists', ['method' => '_sync']));
+    if (!$table) {
+      throw new InvalidArgumentException(trans('modelfactory::exception.method_not_exists', ['method' => 'metaTable']));
     }
     // 同步准备阶段
     $now = Carbon::now();
-    $timestamp = 0;
-    $config = $this->_sync()->where('alias', $this->name)->first();
-    if (!$config) { // 没有配置同步，第一次同步
-      $config = ['name' => '', 'duration' => $this->duration];
-    } elseif ($config['duration'] == 0) { // 有效周期为0，代表无须同步
-      app('log')->notice('数据同步（下行）中止，无需自动同步', ['name' => $this->name]);
-      return true;
-    } elseif (Carbon::createFromTimestamp($config['synchronized_at'])->addSeconds($config['duration'])->gt($now)) { // 持续时间内，无须同步
+    $meta = $table->where('alias', $this->name)->first();
+    if (Carbon::createFromTimestamp($meta['synchronized_at'])->addSeconds($meta['duration'])->gt($now)) { // 持续时间内，无须同步
       app('log')->notice('数据同步（下行）中止，数据持续有效', ['name' => $this->name]);
       return true;
-    } else {
-      $timestamp = $config['synchronized_at'];
     }
+    $timestamp = $meta['synchronized_at'];
     app('log')->info('数据同步（下行）开始', ['name' => $this->name]);
     // 开始同步
     $data = $this->download($timestamp);
@@ -248,13 +291,12 @@ abstract class Driver {
       $model && $objects[] = $model;
     }
     // 更新配置记录
-    $config['synchronized_at'] = $now->format('U');
-    $this->_sync()->updateOrInsert(['alias' => $this->name], $config);
+    $table->updateOrInsert(['alias' => $this->name], ['synchronized_at' => $now->format('U')]);
     if ($objects) {
       app('log')->info('数据同步（下行）成功，成功同步 '.count($objects).' 条记录', ['name' => $this->name]);
       return true;
     } else {
-      app('log')->emergency('数据同步（下行）失败', ['name' => $this->name]);
+      app('log')->emergency('数据同步（下行）失败或成功同步 0 条记录', ['name' => $this->name]);
       return false;
     }
   }
